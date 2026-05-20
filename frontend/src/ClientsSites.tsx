@@ -89,6 +89,7 @@ type ClientRow = {
   id?: string
   name: string
   phone: string
+  adminId?: string
   sites: number
   revenue: string
   received: string
@@ -110,7 +111,7 @@ type ClientsSitesProps = {
 }
 
 export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
-  const { token, user, activeInstrumentId } = useAuth()
+  const { token, user, activeInstrumentId, company, companyAdmins, managers } = useAuth()
   const { selectedYear } = useSelectedYear()
   const { refreshTick } = useRefresh()
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
@@ -148,6 +149,7 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
             id: string
             name: string
             phone: string
+            adminId?: string
             sites: number
             revenue: string
             received: string
@@ -490,7 +492,8 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
     try {
       const res = await http.get<{
         ok: boolean
-        client: ClientRow
+        client: ClientRow & { adminId?: string }
+        coworker?: { fullName?: string; phone?: string }
         sites: SiteRow[]
         visits?: Array<{
           id: string
@@ -517,12 +520,59 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
         return
       }
       await runExport('client PDF', () =>
+        // Include only the logged-in admin and one coworker in the report header.
+        // Avoid sending the full admin list.
         lazyExportClientPdf({
           client: res.data.client ?? selectedClient,
           sites: res.data.sites ?? selectedSites,
           visits: res.data.visits,
           credits: res.data.credits,
           totals: res.data.totals,
+          companyName: company?.name,
+          companyEmail: company?.email,
+          adminContacts: (() => {
+            const normalize = (v: string | undefined) => (v ?? '').trim().toLowerCase()
+            const normalizePhone = (v: string | undefined) => (v ?? '').replace(/\D/g, '')
+            const loggedIn = {
+              fullName: user?.fullName?.trim() || '',
+              phone: user?.phone?.trim() || '',
+            }
+            const coworkerFromReport = {
+              fullName: res.data.coworker?.fullName?.trim() || '',
+              phone: res.data.coworker?.phone?.trim() || '',
+            }
+            const clientAdminId = (res.data.client?.adminId ?? selectedClient?.adminId ?? '').trim()
+            const managerCoworker = clientAdminId
+              ? managers.find((m) => (m.adminId ?? '').trim() === clientAdminId)
+              : null
+            const loggedInName = normalize(loggedIn.fullName)
+            const loggedInPhone = normalizePhone(loggedIn.phone)
+            const coworker =
+              ((coworkerFromReport.fullName || coworkerFromReport.phone)
+                ? coworkerFromReport
+                : managerCoworker
+                ? { fullName: managerCoworker.name, phone: managerCoworker.phone }
+                : companyAdmins.find((a) => {
+                    const name = normalize(a.fullName)
+                    const phone = normalizePhone(a.phone)
+                    if (!name && !phone) return false
+                    const sameByPhone = Boolean(loggedInPhone) && Boolean(phone) && loggedInPhone === phone
+                    const sameByName = Boolean(loggedInName) && Boolean(name) && loggedInName === name
+                    return !sameByPhone && !sameByName
+                  })) ?? null
+            if (coworker) {
+              const cName = normalize(coworker.fullName)
+              const cPhone = normalizePhone(coworker.phone)
+              const sameByPhone = Boolean(loggedInPhone) && Boolean(cPhone) && loggedInPhone === cPhone
+              const sameByName = Boolean(loggedInName) && Boolean(cName) && loggedInName === cName
+              if (sameByPhone || sameByName) {
+                return [loggedIn].filter((c): c is { fullName: string; phone: string } => Boolean(c.fullName || c.phone))
+              }
+            }
+            return [loggedIn, coworker].filter(
+              (c): c is { fullName: string; phone: string } => Boolean(c && (c.fullName || c.phone)),
+            )
+          })(),
         }),
       )
     } catch {

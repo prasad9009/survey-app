@@ -30,6 +30,7 @@ export type EditSiteVisitInitial = {
   visitId: string
   date: string
   engineerName?: string
+  dwgRefBy?: string
   dwgNo?: string
   machine?: string
   notes?: string
@@ -69,6 +70,7 @@ const fieldClass =
 export function EditSiteVisitModal({ open, initial, onClose, onSaved }: EditSiteVisitModalProps) {
   const [visitDate, setVisitDate] = useState('')
   const [engineerName, setEngineerName] = useState('')
+  const [dwgRefBy, setDwgRefBy] = useState('')
   const [dwgNo, setDwgNo] = useState('')
   const [machine, setMachine] = useState('Total Station')
   const [notes, setNotes] = useState('')
@@ -82,6 +84,7 @@ export function EditSiteVisitModal({ open, initial, onClose, onSaved }: EditSite
     if (!open || !initial) return
     setVisitDate(parseVisitDateForInput(initial.date))
     setEngineerName(initial.engineerName ?? '')
+    setDwgRefBy(initial.dwgRefBy ?? '')
     setDwgNo(initial.dwgNo ?? '')
     setMachine(initial.machine ?? 'Total Station')
     setNotes(initial.notes ?? '')
@@ -114,7 +117,7 @@ export function EditSiteVisitModal({ open, initial, onClose, onSaved }: EditSite
     setSaving(true)
     try {
       const res = await http.put<{ ok: boolean; error?: string }>(`/api/site-visits/${initial.visitMongoId}`, {
-        visitDate, engineerName: engineerName.trim(), dwgNo: dwgNo.trim(), machineLabel: machine,
+        visitDate, engineerName: engineerName.trim(), dwgRefBy: dwgRefBy.trim(), dwgNo: dwgNo.trim(), machineLabel: machine,
         workDescription: notes, notes: notes.trim(), paymentMode: paymentMode.trim(), paymentStatus,
         billingLines: billingLines.map((line) => {
           const q = parseFloat(line.quantity.replace(/[^\d.-]/g, '')) || 0
@@ -151,6 +154,7 @@ export function EditSiteVisitModal({ open, initial, onClose, onSaved }: EditSite
           <div className="flex-1 space-y-3 overflow-y-auto px-4 py-3">
             <label className="grid gap-1"><span className="text-xs font-bold text-neutral-700">Visit Date</span><input type="date" value={visitDate} onChange={(e) => setVisitDate(e.target.value)} className={fieldClass} /></label>
             <label className="grid gap-1"><span className="text-xs font-bold text-neutral-700">Engg. Name</span><input value={engineerName} onChange={(e) => setEngineerName(e.target.value)} className={fieldClass} placeholder="Engineer name" /></label>
+            <label className="grid gap-1"><span className="text-xs font-bold text-neutral-700">DWG Ref. By</span><input value={dwgRefBy} onChange={(e) => setDwgRefBy(e.target.value)} className={fieldClass} placeholder="Enter DWG reference by" /></label>
             <label className="grid gap-1"><span className="text-xs font-bold text-neutral-700">DWG No.</span><input value={dwgNo} onChange={(e) => setDwgNo(e.target.value)} className={fieldClass} placeholder="Enter DWG number" /></label>
             <label className="grid gap-1"><span className="text-xs font-bold text-neutral-700">Machine</span><input value={machine} onChange={(e) => setMachine(e.target.value)} className={fieldClass} /></label>
             <label className="grid gap-1"><span className="text-xs font-bold text-neutral-700">Payment mode</span><input value={paymentMode} onChange={(e) => setPaymentMode(e.target.value)} className={fieldClass} /></label>

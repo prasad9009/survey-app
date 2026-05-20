@@ -274,16 +274,29 @@ export async function getClientReportExport(req, clientId, yearRaw) {
 
   const { revenue, received, pending } = await clientFinancials(client._id, visitYearRange, instrumentId)
   const totalCredit = credits.reduce((sum, t) => sum + decAmount(t.amount), 0)
+  const coworkerAdmin =
+    client.adminId
+      ? await User.findOne({ _id: client.adminId, companyId: req.user.companyId })
+          .select('profile.fullName profile.phone')
+          .lean()
+      : null
 
   return {
     client: {
       name: client.name,
       phone: client.phone ?? '',
+      adminId: client.adminId ? String(client.adminId) : undefined,
       sites: sites.length,
       revenue: formatInr(revenue),
       received: formatInr(received),
       pending: formatInr(pending),
     },
+    coworker: coworkerAdmin
+      ? {
+          fullName: trimStr(coworkerAdmin.profile?.fullName),
+          phone: trimStr(coworkerAdmin.profile?.phone),
+        }
+      : undefined,
     sites: siteRows,
     visits: visitRows,
     credits: creditRows,

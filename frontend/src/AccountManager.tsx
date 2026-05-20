@@ -907,6 +907,10 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
                             await exportAccountManagerReportPdf({
                               accountManagerName: manager.name,
                               companyName: company?.name,
+                              adminName: user?.fullName?.trim() || company?.name || 'Admin',
+                              adminPhone: user?.phone?.trim() || '',
+                              coworkerName: managerFromSession?.name || manager.name,
+                              coworkerPhone: managerFromSession?.phone || manager.phone || '',
                               year: selectedYear,
                               transactions: exportRows,
                               totalDebit: debit,

@@ -76,10 +76,10 @@ async function appendPhotoPages(doc: jsPDF, photoUrls: string[], visitId: string
 
     doc.setTextColor(35, 35, 35)
     doc.setFont('helvetica', 'bold')
-    doc.setFontSize(14)
+    doc.setFontSize(16)
     doc.text('SITE VISIT PHOTOGRAPHS', pageW / 2, 18, { align: 'center' })
     doc.setFont('helvetica', 'normal')
-    doc.setFontSize(9)
+    doc.setFontSize(11)
     doc.setTextColor(80, 80, 80)
     doc.text(`Report / Visit: ${visitId}`, pageW / 2, 24, { align: 'center' })
 
@@ -93,7 +93,7 @@ async function appendPhotoPages(doc: jsPDF, photoUrls: string[], visitId: string
         doc.addImage(dataUrl, fmt, x, y, w, h)
       } catch {
         doc.setFont('helvetica', 'italic')
-        doc.setFontSize(10)
+        doc.setFontSize(12)
         doc.setTextColor(120, 120, 120)
         doc.text('(Photo could not be loaded)', x + 4, y + h / 2)
       }
@@ -105,7 +105,7 @@ function lineValue(doc: jsPDF, xStart: number, xEnd: number, y: number, value: s
   doc.line(xStart, y + 0.8, xEnd, y + 0.8)
   doc.setFont('helvetica', 'normal')
   doc.setTextColor(24, 24, 24)
-  doc.setFontSize(10)
+  doc.setFontSize(12)
   doc.text(value || '-', xStart + 1.2, y)
 }
 
@@ -116,6 +116,22 @@ export async function exportVisitRecordPdf(data: VisitRecordPdfData) {
 
   doc.setFillColor(255, 255, 255)
   doc.rect(0, 0, pageWidth, 210, 'F')
+  // Subtle centered watermark logo behind report content.
+  try {
+    const anyDoc = doc as unknown as {
+      GState?: new (options: { opacity: number }) => unknown
+      setGState?: (state: unknown) => void
+    }
+    if (anyDoc.GState && typeof anyDoc.setGState === 'function') {
+      const faded = new anyDoc.GState({ opacity: 0.07 })
+      anyDoc.setGState(faded)
+      doc.addImage(logoDataUrl, 'JPEG', 94, 43, 110, 110)
+      const reset = new anyDoc.GState({ opacity: 1 })
+      anyDoc.setGState(reset)
+    }
+  } catch {
+    // If gState is unavailable, skip watermark instead of risking opaque overlap.
+  }
   doc.setDrawColor(60, 60, 60)
   doc.rect(6, 6, 285, 198)
 
@@ -124,13 +140,13 @@ export async function exportVisitRecordPdf(data: VisitRecordPdfData) {
 
   doc.setTextColor(35, 35, 35)
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(8)
+  doc.setFontSize(10)
   doc.text('// SHREE //', pageWidth / 2, 12, { align: 'center' })
-  doc.setFontSize(16)
+  doc.setFontSize(18)
   doc.text('SAMARTH', pageWidth / 2, 19, { align: 'center' })
   doc.text("LAND SURVEYOR'S", pageWidth / 2, 27, { align: 'center' })
   doc.roundedRect(pageWidth / 2 - 38, 29.5, 76, 11, 3, 3)
-  doc.setFontSize(14)
+  doc.setFontSize(16)
   doc.text('DAILY SURVEY REPORT', pageWidth / 2, 37, { align: 'center' })
 
   const adminLines = (data.adminContacts ?? [])
@@ -138,9 +154,9 @@ export async function exportVisitRecordPdf(data: VisitRecordPdfData) {
     .filter((line) => line.length > 0)
   const emailLine = (data.companyEmail ?? 'samarthlandsurveyors@gmail.com').trim()
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(6)
+  doc.setFontSize(9.5)
   let adminY = 15
-  const adminLineGap = 6
+  const adminLineGap = 8
   if (adminLines.length) {
     for (const line of adminLines) {
       doc.text(line, 211, adminY)
@@ -148,6 +164,7 @@ export async function exportVisitRecordPdf(data: VisitRecordPdfData) {
     }
   }
   doc.setFont('helvetica', 'italic')
+  doc.setFontSize(9.5)
   doc.text(emailLine, 211, adminY)
   doc.setDrawColor(50, 50, 50)
   doc.line(10, 42, 286, 42)
@@ -160,7 +177,7 @@ export async function exportVisitRecordPdf(data: VisitRecordPdfData) {
   let y = 53
 
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(10)
+  doc.setFontSize(12)
   doc.text('Site Report No. :', leftLabel, y)
   lineValue(doc, leftValueStart, 108, y, data.visitId)
   doc.text('Visit No. :', rightLabel, y)
@@ -205,14 +222,14 @@ export async function exportVisitRecordPdf(data: VisitRecordPdfData) {
   doc.line(leftValueStart, y + 0.8, 286, y + 0.8)
   doc.setFont('helvetica', 'normal')
   doc.setTextColor(24, 24, 24)
-  doc.setFontSize(10)
+  doc.setFontSize(12)
   const workLines = doc.splitTextToSize(workText, 286 - leftValueStart - 2)
   doc.text(workLines, leftValueStart + 1.2, y)
   if (workLines.length > 1) y += (workLines.length - 1) * 5
 
   y += rowGap
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(10)
+  doc.setFontSize(12)
   doc.setTextColor(35, 35, 35)
   doc.text('Other Details :', leftLabel, y)
   lineValue(doc, leftValueStart, 200, y, data.notes?.trim() || '-')
@@ -229,7 +246,7 @@ export async function exportVisitRecordPdf(data: VisitRecordPdfData) {
   doc.line(12, signY, 90, signY)
   doc.line(108, signY, 186, signY)
   doc.line(204, signY, 282, signY)
-  doc.setFontSize(10)
+  doc.setFontSize(12)
   doc.setFont('helvetica', 'bold')
   doc.text('Survey Engg.', 50, 188, { align: 'center' })
   doc.text('Site Engg Sign', 147, 188, { align: 'center' })
@@ -237,7 +254,7 @@ export async function exportVisitRecordPdf(data: VisitRecordPdfData) {
 
   doc.line(10, 193, 286, 193)
   doc.setFont('helvetica', 'normal')
-  doc.setFontSize(11)
+  doc.setFontSize(13)
   doc.text('Office Add. - Bhoinagar Shahapur, Ichalkaranji - 416 121', 12, 199)
 
   await appendPhotoPages(doc, data.photoUrls ?? [], data.visitId)

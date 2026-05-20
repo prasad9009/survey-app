@@ -8,6 +8,9 @@ export default defineConfig(({ mode }) => {
   /** Where Vite forwards `/api/*` in dev. Must match a running Express API (see `npm run server`). */
   const fileEnv = loadEnv(mode, process.cwd(), '')
   const apiProxyTarget = fileEnv.VITE_API_PROXY_TARGET || 'http://localhost:4000'
+  const buildVersion =
+    fileEnv.VITE_APP_VERSION ||
+    `${new Date().toISOString()}-${Math.random().toString(36).slice(2, 8)}`
 
   return {
   plugins: [
@@ -15,6 +18,11 @@ export default defineConfig(({ mode }) => {
     react(),
     VitePWA({
       registerType: 'autoUpdate',
+      devOptions: {
+        enabled: false,
+      },
+      injectRegister: 'auto',
+      cleanupOutdatedCaches: true,
       includeAssets: ['favicon.svg'],
       manifest: {
         id: '/',
@@ -26,7 +34,7 @@ export default defineConfig(({ mode }) => {
         display: 'standalone',
         orientation: 'portrait',
         theme_color: '#000000',
-        background_color: '#ffffff',
+        background_color: '#000000',
         icons: [
           {
             src: '/icons/icon-192.png',
@@ -55,6 +63,9 @@ export default defineConfig(({ mode }) => {
         ],
       },
       workbox: {
+        cleanupOutdatedCaches: true,
+        clientsClaim: true,
+        skipWaiting: true,
         maximumFileSizeToCacheInBytes: 12 * 1024 * 1024,
         globPatterns: ['**/*.{js,css,html,ico,png,svg,json,woff2,webmanifest}'],
         navigateFallback: '/index.html',
@@ -109,6 +120,9 @@ export default defineConfig(({ mode }) => {
         },
       },
     },
+  },
+  define: {
+    __APP_BUILD_VERSION__: JSON.stringify(buildVersion),
   },
   server: {
     ...(fileEnv.VITE_DEV_ALLOWED_HOSTS

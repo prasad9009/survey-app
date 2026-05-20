@@ -22,6 +22,10 @@ export type PdfTransaction = {
 export type ExportAccountManagerReportPdfOpts = {
   accountManagerName: string
   companyName?: string
+  adminName?: string
+  adminPhone?: string
+  coworkerName?: string
+  coworkerPhone?: string
   year: string
   transactions: PdfTransaction[]
   totalDebit: number
@@ -83,6 +87,10 @@ export async function exportAccountManagerReportPdf(opts: ExportAccountManagerRe
   const {
     accountManagerName,
     companyName = 'Samarth Land Surveyors',
+    adminName,
+    adminPhone,
+    coworkerName,
+    coworkerPhone,
     year,
     transactions,
     totalDebit,
@@ -93,26 +101,39 @@ export async function exportAccountManagerReportPdf(opts: ExportAccountManagerRe
 
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
   const marginX = PDF_MARGIN
-  let startY = 16
+  const pageWidth = doc.internal.pageSize.getWidth()
+  let startY = 36
 
   try {
     const logoDataUrl = await loadImageAsDataUrl(
       typeof invoiceLogo === 'string' ? invoiceLogo : String(invoiceLogo),
     )
-    doc.addImage(logoDataUrl, 'JPEG', marginX, 10, 18, 18)
-    startY = 22
+    doc.addImage(logoDataUrl, 'JPEG', marginX, 8, 22, 22)
   } catch {
-    startY = 16
+    // Keep same letterhead spacing even when logo is unavailable.
   }
 
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(15)
+  doc.setFontSize(16)
   doc.setTextColor(23, 23, 23)
-  doc.text(companyName, marginX + 22, 14)
+  doc.text(companyName, pageWidth / 2, 14, { align: 'center' })
+  doc.setFontSize(10)
+  doc.text('Client Transaction Report', pageWidth / 2, 20, { align: 'center' })
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(9)
   doc.setTextColor(82, 82, 82)
-  doc.text('Account Manager Report', marginX + 22, 19)
+  doc.text('Account Manager Ledger', pageWidth / 2, 25, { align: 'center' })
+
+  const adminLine = [adminName?.trim(), adminPhone?.trim()].filter(Boolean).join(' - ')
+  const coworkerLine = [coworkerName?.trim(), coworkerPhone?.trim()].filter(Boolean).join(' - ')
+  const contactRightX = pageWidth - marginX
+  doc.setTextColor(45, 45, 45)
+  doc.setFontSize(8.5)
+  doc.setFont('helvetica', 'bold')
+  doc.text(adminLine || '—', contactRightX, 12, { align: 'right' })
+  doc.text(coworkerLine || accountManagerName.trim() || '—', contactRightX, 17, { align: 'right' })
+  doc.setDrawColor(60, 60, 60)
+  doc.line(marginX, 30, pageWidth - marginX, 30)
 
   const exportedOn = new Date().toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })
 
@@ -176,10 +197,18 @@ export async function exportFilteredTransactionsPdf(opts: {
   accountManagerName?: string
   pendingAmount?: number
   companyName?: string
+  adminName?: string
+  adminPhone?: string
+  coworkerName?: string
+  coworkerPhone?: string
 }) {
   await exportAccountManagerReportPdf({
     accountManagerName: opts.accountManagerName?.trim() || 'Account Manager',
     companyName: opts.companyName,
+    adminName: opts.adminName,
+    adminPhone: opts.adminPhone,
+    coworkerName: opts.coworkerName,
+    coworkerPhone: opts.coworkerPhone,
     year: opts.year,
     transactions: opts.transactions,
     totalDebit: opts.totalDebit,

@@ -98,6 +98,7 @@ type SiteVisitRecord = {
   photoUrls?: string[]
   billingLines?: InvoicePdfBillingLine[]
   billingOtherCharges?: number
+  dwgRefBy?: string
   dwgNo?: string
 }
 
@@ -163,6 +164,7 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
     sitePhone?: string
     engineerName?: string
     contactPerson?: string
+    dwgRefBy?: string
     dwgNo?: string
   } | null>(null)
   const [editVisitOpen, setEditVisitOpen] = useState(false)
@@ -194,6 +196,7 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
           sitePhone?: string
           engineerName?: string
           contactPerson?: string
+          dwgRefBy?: string
           dwgNo?: string
           photoUrls?: string[]
           billingLines?: InvoicePdfBillingLine[]
@@ -222,6 +225,7 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
         sitePhone: v.sitePhone,
         engineerName: v.engineerName,
         contactPerson: v.contactPerson,
+        dwgRefBy: v.dwgRefBy,
         dwgNo: v.dwgNo,
       })
     } catch {
@@ -266,7 +270,6 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
     })
     return selected
       .filter((a) => (a.fullName || '').trim() || (a.phone || '').trim())
-      .slice(0, 1)
       .map((a) => ({ fullName: a.fullName, phone: a.phone }))
   }, [companyAdmins, activeInstrumentId])
 
@@ -656,6 +659,7 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
       visitId: record?.id ?? visitId,
       date: record?.date ?? effectiveVisitDate,
       engineerName: record?.engineerName ?? effectiveEngineerName,
+      dwgRefBy: record?.dwgRefBy ?? visitDetailFromApi?.dwgRefBy,
       dwgNo: record?.dwgNo ?? visitDetailFromApi?.dwgNo,
       machine: record?.machine ?? effectiveMachine,
       notes: record?.notes ?? effectiveNotes,
@@ -704,6 +708,7 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
     sitePhone?: string
     engineerName?: string
     billingLines?: InvoicePdfBillingLine[]
+    dwgRefBy?: string
     dwgNo?: string
     photoUrls?: string[]
   }) => {
@@ -731,7 +736,7 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
         notes: record.notes,
         contactPerson: effectiveContactPerson,
         phone: reportPhone || '-',
-        dwgRefBy: 'Samarth Land Surveyors',
+        dwgRefBy: record.dwgRefBy?.trim() || visitDetailFromApi?.dwgRefBy?.trim() || '—',
         dwgNo: record.dwgNo?.trim() || visitDetailFromApi?.dwgNo?.trim() || '—',
         work: formatBillingLinesForDisplay(
           record.billingLines ?? visitBillingForInvoice.billingLines,

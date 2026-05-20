@@ -106,6 +106,7 @@ function drawWatermark(
   logoDataUrl: string,
   pageWidth: number,
   pageHeight: number,
+  opacity = 0.08,
 ) {
   const fmt = dataUrlImageFormat(logoDataUrl)
   const watermarkSize = 105
@@ -116,12 +117,24 @@ function drawWatermark(
     setGState?: (state: unknown) => void
   }
   if (pdfDoc.GState && pdfDoc.setGState) {
-    pdfDoc.setGState(new pdfDoc.GState({ opacity: 0.08 }))
+    pdfDoc.setGState(new pdfDoc.GState({ opacity }))
     doc.addImage(logoDataUrl, fmt, watermarkX, watermarkY, watermarkSize, watermarkSize)
     pdfDoc.setGState(new pdfDoc.GState({ opacity: 1 }))
   } else {
     doc.addImage(logoDataUrl, fmt, watermarkX, watermarkY, watermarkSize, watermarkSize)
   }
+}
+
+function drawWatermarkOnAllPages(doc: jsPDF, logoDataUrl: string, opacity = 0.06) {
+  const totalPages = doc.getNumberOfPages()
+  const activePage = doc.getCurrentPageInfo().pageNumber
+  for (let page = 1; page <= totalPages; page += 1) {
+    doc.setPage(page)
+    const pageWidth = doc.internal.pageSize.getWidth()
+    const pageHeight = doc.internal.pageSize.getHeight()
+    drawWatermark(doc, logoDataUrl, pageWidth, pageHeight, opacity)
+  }
+  doc.setPage(activePage)
 }
 
 function drawInvoiceHeader(
@@ -291,7 +304,7 @@ function drawBankDetailsTable(
           valign: 'bottom',
           fontStyle: 'bold',
           fontSize: 9.5,
-          minCellHeight: cols.stampDataUrl ? 32 : 22,
+          minCellHeight: cols.stampDataUrl ? 36 : 22,
         },
       },
     ],
@@ -331,11 +344,11 @@ function drawBankDetailsTable(
       if (!cols.stampDataUrl || data.section !== 'body') return
       if (data.row.index !== signatoryRowIndex || data.column.index !== 0) return
       const fmt = dataUrlImageFormat(cols.stampDataUrl)
-      const imgW = 28
-      const imgH = 28
-      const labelW = doc.getTextWidth('Authorised Signatory')
-      const stampX = right - labelW - imgW - 6
-      const stampY = data.cell.y + 2
+      const imgW = 24
+      const imgH = 24
+      // Place stamp above the right-aligned "Authorised Signatory" label.
+      const stampX = data.cell.x + data.cell.width - imgW - 6
+      const stampY = data.cell.y + 3
       doc.addImage(cols.stampDataUrl, fmt, stampX, stampY, imgW, imgH)
     },
   })
@@ -431,7 +444,6 @@ export async function exportInvoicePdf(data: InvoicePdfData) {
   const logoDataUrl = await loadInvoicePdfLogoDataUrl()
   const co = buildInvoiceHeaderCompanyOpts(companyHeader)
 
-  drawWatermark(doc, logoDataUrl, pageWidth, pageHeight)
   const headerRuleY = drawInvoiceHeader(doc, logoDataUrl, {
     title: 'INVOICE',
     invoiceNo,
@@ -519,6 +531,7 @@ export async function exportInvoicePdf(data: InvoicePdfData) {
   const bankColumns = data.bankColumns ?? (await fetchInvoiceBankColumns())
   const bankDraw = await resolveInvoiceBankDrawModel(bankColumns)
   drawBankDetailsTable(doc, left, notesY, pageWidth, right, bankDraw)
+  drawWatermarkOnAllPages(doc, logoDataUrl)
 
   const safeClient = (data.client || 'client')
     .toLowerCase()
@@ -583,7 +596,6 @@ export async function exportCombinedSiteInvoicePdf(data: {
   const logoDataUrl = await loadInvoicePdfLogoDataUrl()
   const co = buildInvoiceHeaderCompanyOpts(companyHeader)
 
-  drawWatermark(doc, logoDataUrl, pageWidth, pageHeight)
   const headerRuleY = drawInvoiceHeader(doc, logoDataUrl, {
     title: 'INVOICE (COMBINED)',
     invoiceNo,
@@ -655,6 +667,7 @@ export async function exportCombinedSiteInvoicePdf(data: {
   const bankColumns = data.bankColumns ?? (await fetchInvoiceBankColumns())
   const bankDraw = await resolveInvoiceBankDrawModel(bankColumns)
   drawBankDetailsTable(doc, left, notesY, pageWidth, right, bankDraw)
+  drawWatermarkOnAllPages(doc, logoDataUrl)
 
   const safeClient = (data.client || 'client')
     .toLowerCase()

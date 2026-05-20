@@ -1,6 +1,8 @@
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
+import invoiceLogo from '../assets/logo.jpeg'
 import { downloadCsv, savePdf } from './downloadFile'
+import { formatEngineerLine } from './formatEngineerContact'
 import {
   formatPdfAmountCell,
   PDF_AMOUNT_COL,
@@ -57,6 +59,9 @@ export type ClientReportExportData = {
     creditTotal: number
     pending: number
   }
+  companyName?: string
+  companyEmail?: string
+  adminContacts?: Array<{ fullName: string; phone: string }>
 }
 
 function escapeCsvCell(value: string | number) {
@@ -75,6 +80,17 @@ function rowsToCsv(headers: string[], rows: (string | number)[][]) {
 
 function formatInrPlain(n: number) {
   return `Rs ${Math.round(n).toLocaleString('en-IN')}`
+}
+
+async function loadImageAsDataUrl(src: string) {
+  const response = await fetch(src)
+  const blob = await response.blob()
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(String(reader.result))
+    reader.onerror = () => reject(new Error('Unable to load logo'))
+    reader.readAsDataURL(blob)
+  })
 }
 
 const CLIENT_ALL_TABLE_COLS = {
@@ -161,36 +177,89 @@ export async function exportAllClientsExcel(clients: ClientExportRow[]) {
 export async function exportClientPdf(data: ClientReportExportData) {
   const { client, sites, visits = [], credits = [], totals } = data
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
-  let y = 16
+  const marginX = PDF_MARGIN
+  const pageWidth = doc.internal.pageSize.getWidth()
+  let y = 36
+
+  try {
+    const logoDataUrl = await loadImageAsDataUrl(
+      typeof invoiceLogo === 'string' ? invoiceLogo : String(invoiceLogo),
+    )
+    doc.addImage(logoDataUrl, 'JPEG', marginX, 8, 22, 22)
+  } catch {
+    // Keep header spacing even when logo is unavailable.
+  }
+
+  const companyName = (data.companyName ?? 'Samarth Land Surveyors').trim() || 'Samarth Land Surveyors'
+  const adminLines = (data.adminContacts ?? [])
+    .map((a) => formatEngineerLine(a.fullName, a.phone, ' - '))
+    .filter(Boolean)
+  const emailLine = (data.companyEmail ?? 'samarthlandsurveyors@gmail.com').trim()
+  const contactRightX = pageWidth - marginX
+
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(16)
+  doc.setTextColor(23, 23, 23)
+  doc.text(companyName, pageWidth / 2, 14, { align: 'center' })
+  doc.setFontSize(10)
+  doc.text('Client Report', pageWidth / 2, 20, { align: 'center' })
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(9)
+  doc.setTextColor(82, 82, 82)
+  doc.text('Client Summary & Visits', pageWidth / 2, 25, { align: 'center' })
+
+  // Keep header contact block concise to avoid overlap with centered title.
+  const adminLine = adminLines[0] || '—'
+  const coworkerLine = adminLines[1] || '—'
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(8)
+  doc.setTextColor(45, 45, 45)
+  doc.text(adminLine, contactRightX, 11, { align: 'right', maxWidth: 74 })
+  doc.text(coworkerLine, contactRightX, 15, { align: 'right', maxWidth: 74 })
+  doc.setFont('helvetica', 'italic')
+  doc.text(emailLine || 'samarthlandsurveyors@gmail.com', contactRightX, 19, {
+    align: 'right',
+    maxWidth: 74,
+  })
+  doc.setDrawColor(60, 60, 60)
+  doc.line(marginX, 30, pageWidth - marginX, 30)
 
   doc.setFontSize(16)
   doc.setTextColor(23, 23, 23)
-  doc.text(`Client Report: ${client.name}`, 14, y)
+  doc.text(`Client Report: ${client.name}`, marginX, y)
   y += 10
   doc.setFontSize(10)
   doc.setTextColor(82, 82, 82)
-  doc.text(`Phone: ${client.phone}`, 14, y)
+  doc.text(`Phone: ${client.phone}`, marginX, y)
   y += 5
-  doc.text(`Total Sites: ${client.sites}`, 14, y)
+  doc.text(`Total Sites: ${client.sites}`, marginX, y)
   y += 5
-  doc.text(`Total Revenue: ${client.revenue}`, 14, y)
-  doc.text(`Received: ${client.received}`, 105, y)
+  doc.setFont('helvetica', 'bold')
+  doc.setTextColor(35, 35, 35)
+  doc.text('Total Revenue:', marginX, y)
+  doc.text('Received:', 105, y)
+  doc.text('Pending:', 168, y)
   y += 5
-  doc.text(`Pending: ${client.pending}`, 14, y)
+  doc.setFont('helvetica', 'normal')
+  doc.setTextColor(82, 82, 82)
+  doc.text(client.revenue, marginX, y)
+  doc.text(client.received, 105, y)
+  doc.text(client.pending, 168, y)
   if (totals) {
-    doc.text(`Credits (transactions): ${formatInrPlain(totals.creditTotal)}`, 105, y)
+    y += 5
+    doc.text(`Credits (transactions): ${formatInrPlain(totals.creditTotal)}`, marginX, y)
   }
   y += 5
   doc.text(
     `Generated: ${new Date().toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}`,
-    14,
+    marginX,
     y,
   )
   y += 8
 
   doc.setFontSize(11)
   doc.setTextColor(35, 35, 35)
-  doc.text('Sites', 14, y)
+  doc.text('Sites', marginX, y)
   y += 2
 
   const siteBody =
@@ -218,7 +287,7 @@ export async function exportClientPdf(data: ClientReportExportData) {
   y = ((doc as jsPDF & { lastAutoTable?: { finalY?: number } }).lastAutoTable?.finalY ?? y) + 10
 
   doc.setFontSize(11)
-  doc.text('Site Visits', 14, y)
+  doc.text('Site Visits', marginX, y)
   y += 2
 
   const visitBody =
@@ -249,11 +318,11 @@ export async function exportClientPdf(data: ClientReportExportData) {
 
   if (y > 250) {
     doc.addPage()
-    y = 16
+    y = 20
   }
 
   doc.setFontSize(11)
-  doc.text('Client Credit Transactions', 14, y)
+  doc.text('Client Credit Transactions', marginX, y)
   y += 2
 
   const creditBody =
@@ -284,14 +353,14 @@ export async function exportClientPdf(data: ClientReportExportData) {
   if (totals) {
     doc.setFontSize(10)
     doc.setTextColor(55, 55, 55)
-    doc.text(`Total revenue: ${formatInrPlain(totals.revenue)}`, 14, y)
+    doc.text(`Total revenue: ${formatInrPlain(totals.revenue)}`, marginX, y)
     y += 5
-    doc.text(`Total received / credits: ${formatInrPlain(totals.received)}`, 14, y)
+    doc.text(`Total received / credits: ${formatInrPlain(totals.received)}`, marginX, y)
     y += 5
-    doc.text(`Credit transactions total: ${formatInrPlain(totals.creditTotal)}`, 14, y)
+    doc.text(`Credit transactions total: ${formatInrPlain(totals.creditTotal)}`, marginX, y)
     y += 5
     doc.setFont('helvetica', 'bold')
-    doc.text(`Pending amount: ${formatInrPlain(totals.pending)}`, 14, y)
+    doc.text(`Pending amount: ${formatInrPlain(totals.pending)}`, marginX, y)
   }
 
   const safeName = client.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')

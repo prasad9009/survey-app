@@ -59,6 +59,7 @@ function visitReportFields(v) {
     sitePhone: v.sitePhone ?? '',
     engineerName: v.engineerName ?? '',
     contactPerson: v.contactPerson ?? '',
+    dwgRefBy: v.dwgRefBy ?? '',
     dwgNo: v.dwgNo ?? '',
   }
 }
@@ -208,7 +209,7 @@ export async function listVisits(req) {
   }
   const visits = await SiteVisit.find(match)
     .select(
-      'visitCode visitNo visitDate machineLabel workDescription amount paymentStatus paidAmount paymentMode notes photoUrls billingLines billingOtherCharges clientId siteId siteAddress sitePhone engineerName contactPerson dwgNo',
+      'visitCode visitNo visitDate machineLabel workDescription amount paymentStatus paidAmount paymentMode notes photoUrls billingLines billingOtherCharges clientId siteId siteAddress sitePhone engineerName contactPerson dwgRefBy dwgNo',
     )
     .sort({ visitDate: -1 })
     .limit(200)
@@ -246,6 +247,7 @@ export async function createVisit(req, body, { preUploadedPhotos } = {}) {
     ''
   const sitePhone = typeof body.sitePhone === 'string' ? body.sitePhone.trim() : ''
   const engineerName = typeof body.engineerName === 'string' ? body.engineerName.trim() : ''
+  const dwgRefBy = typeof body.dwgRefBy === 'string' ? body.dwgRefBy.trim() : ''
   const dwgNo = typeof body.dwgNo === 'string' ? body.dwgNo.trim() : ''
   const contactPerson =
     (typeof body.contactPerson === 'string' && body.contactPerson.trim()) || engineerName
@@ -277,6 +279,7 @@ export async function createVisit(req, body, { preUploadedPhotos } = {}) {
     siteAddress: siteAddress || undefined,
     sitePhone: sitePhone || undefined,
     engineerName: engineerName || undefined,
+    dwgRefBy: dwgRefBy || undefined,
     dwgNo: dwgNo || undefined,
     contactPerson: contactPerson || undefined,
     workDescription: body.workDescription?.trim(),
@@ -357,6 +360,7 @@ export async function updateVisit(req, visitId, body) {
   if (typeof body.siteAddress === 'string') visit.siteAddress = body.siteAddress.trim()
   if (typeof body.sitePhone === 'string') visit.sitePhone = body.sitePhone.trim()
   if (typeof body.engineerName === 'string') visit.engineerName = body.engineerName.trim()
+  if (typeof body.dwgRefBy === 'string') visit.dwgRefBy = body.dwgRefBy.trim()
   if (typeof body.dwgNo === 'string') visit.dwgNo = body.dwgNo.trim()
   if (typeof body.contactPerson === 'string') visit.contactPerson = body.contactPerson.trim()
   if (typeof body.workDescription === 'string') visit.workDescription = body.workDescription.trim()

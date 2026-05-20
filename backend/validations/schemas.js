@@ -77,6 +77,7 @@ export const createVisitSchema = z.object({
   siteAddress: z.string().max(500).optional(),
   sitePhone: z.string().max(30).optional(),
   engineerName: z.string().max(200).optional(),
+  dwgRefBy: z.string().max(200).optional(),
   dwgNo: z.string().max(120).optional(),
   contactPerson: z.string().max(200).optional(),
   workDescription: z.string().max(5000).optional(),

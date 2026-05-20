@@ -51,6 +51,41 @@ async function loadImageAsDataUrl(src: string) {
   })
 }
 
+function drawWatermark(
+  doc: jsPDF,
+  logoDataUrl: string,
+  pageWidth: number,
+  pageHeight: number,
+  opacity = 0.055,
+) {
+  const size = 105
+  const x = (pageWidth - size) / 2
+  const y = (pageHeight - size) / 2 + 10
+  const anyDoc = doc as jsPDF & {
+    GState?: new (options: { opacity?: number }) => unknown
+    setGState?: (state: unknown) => void
+  }
+  if (anyDoc.GState && anyDoc.setGState) {
+    anyDoc.setGState(new anyDoc.GState({ opacity }))
+    doc.addImage(logoDataUrl, 'JPEG', x, y, size, size)
+    anyDoc.setGState(new anyDoc.GState({ opacity: 1 }))
+    return
+  }
+  doc.addImage(logoDataUrl, 'JPEG', x, y, size, size)
+}
+
+function drawWatermarkOnAllPages(doc: jsPDF, logoDataUrl: string) {
+  const totalPages = doc.getNumberOfPages()
+  const activePage = doc.getCurrentPageInfo().pageNumber
+  for (let page = 1; page <= totalPages; page += 1) {
+    doc.setPage(page)
+    const pageWidth = doc.internal.pageSize.getWidth()
+    const pageHeight = doc.internal.pageSize.getHeight()
+    drawWatermark(doc, logoDataUrl, pageWidth, pageHeight)
+  }
+  doc.setPage(activePage)
+}
+
 function pendingForRow(row: SiteReportVisitRow) {
   const p = row.pendingAmount?.trim()
   if (p) return parsePdfAmount(p)
@@ -72,9 +107,10 @@ export async function exportSiteReportPdf(data: SiteReportPdfData) {
   const pageWidth = doc.internal.pageSize.getWidth()
   const marginX = PDF_MARGIN
   let startY = 16
+  let logoDataUrl: string | null = null
 
   try {
-    const logoDataUrl = await loadImageAsDataUrl(
+    logoDataUrl = await loadImageAsDataUrl(
       typeof invoiceLogo === 'string' ? invoiceLogo : String(invoiceLogo),
     )
     doc.addImage(logoDataUrl, 'JPEG', marginX, 10, 18, 18)
@@ -137,7 +173,7 @@ export async function exportSiteReportPdf(data: SiteReportPdfData) {
   doc.text(`Total visits: ${totalVisits}`, marginX, metaY + 2)
   doc.text(`Total revenue (Rs): ${totalRevenue.toLocaleString('en-IN')}`, marginX + 70, metaY + 2)
   metaY += 6
-  doc.setTextColor(190, 24, 93)
+  doc.setTextColor(23, 23, 23)
   doc.text(`Pending amount (Rs): ${totalPending.toLocaleString('en-IN')}`, marginX, metaY + 2)
 
   const tableStartY = metaY + 10
@@ -177,6 +213,8 @@ export async function exportSiteReportPdf(data: SiteReportPdfData) {
       }
     },
   })
+
+  if (logoDataUrl) drawWatermarkOnAllPages(doc, logoDataUrl)
 
   const safeSite = data.siteName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'site'
   const filename = `Site_Report_${safeSite}_${formatReportFilenameDate()}.pdf`
