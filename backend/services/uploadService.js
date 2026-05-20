@@ -1,11 +1,15 @@
 import mongoose from 'mongoose'
 import { Readable } from 'stream'
+import sharp from 'sharp'
 import { cloudinary } from '../config/cloudinary.js'
 import { assertCloudinaryConfigured } from '../config/env.js'
 import SurveyFile from '../models/SurveyFile.js'
 import { ApiError } from '../utils/ApiError.js'
 
 const CLOUDINARY_DELETE_CHUNK = 100
+const SITE_VISIT_IMAGE_MAX_SIDE_PX = 2200
+const SITE_VISIT_JPEG_QUALITY = 78
+const SITE_VISIT_PNG_QUALITY = 82
 
 /** Parse Cloudinary delivery URL → `public_id` (folder/name, no extension). */
 export function publicIdFromCloudinaryUrl(url) {
@@ -177,6 +181,49 @@ export async function uploadBufferToCloudinary({ buffer, mimeType, folder }) {
     url: uploadResult.secure_url,
     publicId: uploadResult.public_id,
     bytes: uploadResult.bytes,
+  }
+}
+
+/**
+ * Reduce memory/network pressure for visit-photo uploads before Cloudinary upload.
+ * Keeps original when optimization is not useful or unsupported.
+ */
+export async function optimizeSiteVisitImage({ buffer, mimeType }) {
+  if (!buffer?.length) return { buffer, mimeType }
+  if (!mimeType?.startsWith('image/')) return { buffer, mimeType }
+
+  try {
+    let pipeline = sharp(buffer, { failOn: 'none' }).rotate().resize({
+      width: SITE_VISIT_IMAGE_MAX_SIDE_PX,
+      height: SITE_VISIT_IMAGE_MAX_SIDE_PX,
+      fit: 'inside',
+      withoutEnlargement: true,
+    })
+    let outMimeType = mimeType
+    const lowerMime = mimeType.toLowerCase()
+
+    if (lowerMime === 'image/png') {
+      pipeline = pipeline.png({
+        compressionLevel: 9,
+        quality: SITE_VISIT_PNG_QUALITY,
+        palette: true,
+      })
+      outMimeType = 'image/png'
+    } else {
+      pipeline = pipeline.jpeg({
+        quality: SITE_VISIT_JPEG_QUALITY,
+        mozjpeg: true,
+      })
+      outMimeType = 'image/jpeg'
+    }
+
+    const optimized = await pipeline.toBuffer()
+    if (!optimized?.length || optimized.length >= buffer.length) {
+      return { buffer, mimeType }
+    }
+    return { buffer: optimized, mimeType: outMimeType }
+  } catch {
+    return { buffer, mimeType }
   }
 }
 

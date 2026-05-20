@@ -40,7 +40,7 @@ import {
 
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 5 * 1024 * 1024, files: 12 },
+  limits: { fileSize: 10 * 1024 * 1024, files: 12 },
 })
 
 const router = Router()
@@ -224,15 +224,19 @@ router.post(
     const staged = []
     try {
       for (const file of files) {
-        const up = await uploadService.uploadBufferToCloudinary({
+        const optimized = await uploadService.optimizeSiteVisitImage({
           buffer: file.buffer,
           mimeType: file.mimetype,
+        })
+        const up = await uploadService.uploadBufferToCloudinary({
+          buffer: optimized.buffer,
+          mimeType: optimized.mimeType,
           folder: 'survey-app/visits',
         })
         const reg = await uploadService.registerSurveyFile(req, {
           url: up.url,
           publicId: up.publicId,
-          mimeType: file.mimetype,
+          mimeType: optimized.mimeType,
           sizeBytes: up.bytes ?? file.size,
           linked: { entityType: 'site_visit', entityId: visitId },
         })

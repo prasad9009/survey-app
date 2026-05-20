@@ -408,15 +408,19 @@ export async function createVisitWithPhotos(req, body, files) {
   const staged = []
   try {
     for (const file of files ?? []) {
-      const up = await uploadService.uploadBufferToCloudinary({
+      const optimized = await uploadService.optimizeSiteVisitImage({
         buffer: file.buffer,
         mimeType: file.mimetype,
+      })
+      const up = await uploadService.uploadBufferToCloudinary({
+        buffer: optimized.buffer,
+        mimeType: optimized.mimeType,
         folder: 'survey-app/visits',
       })
       staged.push({
         url: up.url,
         publicId: up.publicId,
-        mimeType: file.mimetype,
+        mimeType: optimized.mimeType,
         bytes: up.bytes,
       })
     }

@@ -1329,7 +1329,7 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
                       </span>
                       <span className="mt-3 text-sm font-extrabold text-neutral-900">Tap to upload photos</span>
                       <span className="mt-1 text-xs font-semibold text-neutral-500">
-                        JPG, PNG up to 10MB each
+                        JPG, PNG up to 10 MB each
                       </span>
                     </button>
 

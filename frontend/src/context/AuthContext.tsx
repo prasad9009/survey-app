@@ -29,7 +29,7 @@ export type AccountManagerSummary = {
   phone: string
 }
 
-export type CompanyAdminContact = { id: string; fullName: string; phone: string }
+export type CompanyAdminContact = { id: string; fullName: string; phone: string; instrumentIds?: string[] }
 
 type AuthContextValue = {
   token: string | null

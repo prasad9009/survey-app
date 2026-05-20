@@ -56,11 +56,38 @@ async function listActiveAdminContacts(companyId) {
     .select('profile')
     .sort({ 'profile.fullName': 1 })
     .lean()
-  return admins.map((a) => ({
-    id: a._id.toString(),
-    fullName: a.profile?.fullName ?? '',
-    phone: a.profile?.phone ?? '',
-  }))
+
+  const adminIds = admins.map((a) => a._id)
+  const assignments = adminIds.length
+    ? await InstrumentAssignment.find({
+        companyId,
+        adminId: { $in: adminIds },
+        isActive: true,
+        revokedAt: { $exists: false },
+      })
+        .select('adminId instrumentId')
+        .lean()
+    : []
+
+  const instrumentIdsByAdmin = new Map()
+  for (const row of assignments) {
+    const adminId = row.adminId?.toString?.()
+    const instrumentId = row.instrumentId?.toString?.()
+    if (!adminId || !instrumentId) continue
+    const list = instrumentIdsByAdmin.get(adminId) ?? []
+    if (!list.includes(instrumentId)) list.push(instrumentId)
+    instrumentIdsByAdmin.set(adminId, list)
+  }
+
+  return admins.map((a) => {
+    const id = a._id.toString()
+    return {
+      id,
+      fullName: a.profile?.fullName ?? '',
+      phone: a.profile?.phone ?? '',
+      instrumentIds: instrumentIdsByAdmin.get(id) ?? [],
+    }
+  })
 }
 
 async function findUsersForLogin(identifier) {

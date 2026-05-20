@@ -5,8 +5,12 @@ export type BillingLineDisplay = {
   amount?: number
 }
 
-/** Format billing lines as "Particular - Qty: N" (one per line). */
-export function formatBillingLinesForDisplay(lines?: BillingLineDisplay[] | null, fallback = '—'): string {
+/** Format billing lines as "Particular - Qty: N". */
+export function formatBillingLinesForDisplay(
+  lines?: BillingLineDisplay[] | null,
+  fallback = '—',
+  separator = '\n',
+): string {
   if (!lines?.length) return fallback
   const rows = lines
     .map((row) => {
@@ -21,5 +25,5 @@ export function formatBillingLinesForDisplay(lines?: BillingLineDisplay[] | null
       return label || '—'
     })
     .filter(Boolean)
-  return rows.length ? rows.join('\n') : fallback
+  return rows.length ? rows.join(separator) : fallback
 }

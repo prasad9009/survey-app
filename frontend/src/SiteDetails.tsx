@@ -256,13 +256,19 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
     return Number.isFinite(parsed) && parsed >= 1 ? parsed : undefined
   }, [visitDetailFromApi?.visitNo, visitNoParam])
 
-  const pdfAdminContacts = useMemo(
-    () =>
-      companyAdmins
-        .filter((a) => (a.fullName || '').trim() || (a.phone || '').trim())
-        .map((a) => ({ fullName: a.fullName, phone: a.phone })),
-    [companyAdmins],
-  )
+  const pdfAdminContacts = useMemo(() => {
+    const selected = companyAdmins.filter((a) => {
+      if (!activeInstrumentId) return true
+      const ids = a.instrumentIds ?? []
+      // Keep backward compatibility for sessions where assignment metadata is not yet present.
+      if (ids.length === 0) return true
+      return ids.includes(activeInstrumentId)
+    })
+    return selected
+      .filter((a) => (a.fullName || '').trim() || (a.phone || '').trim())
+      .slice(0, 1)
+      .map((a) => ({ fullName: a.fullName, phone: a.phone }))
+  }, [companyAdmins, activeInstrumentId])
 
   const effectiveEngineerName = useMemo(() => {
     const fromApi = visitDetailFromApi?.engineerName?.trim()
@@ -730,6 +736,7 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
         work: formatBillingLinesForDisplay(
           record.billingLines ?? visitBillingForInvoice.billingLines,
           record.work ?? effectiveWork,
+          ', ',
         ),
         engineerName: reportEngineer || '-',
         photoUrls: photos,
