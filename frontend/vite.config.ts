@@ -11,7 +11,7 @@ export default defineConfig(({ mode }) => {
   const buildVersion =
     fileEnv.VITE_APP_VERSION ||
     `${new Date().toISOString()}-${Math.random().toString(36).slice(2, 8)}`
-  const pwaCacheId = `surveyos-splash-v3-${buildVersion}`
+  const pwaCacheId = `surveyos-offline-v4-${buildVersion}`
 
   return {
   plugins: [
@@ -26,7 +26,11 @@ export default defineConfig(({ mode }) => {
       cleanupOutdatedCaches: true,
       includeAssets: [
         'favicon.png',
+        'branding/logo-bg2.png',
         'splash/logo-bg2.png',
+        'icons/icon-192.png',
+        'icons/icon-512.png',
+        'icons/icon-512-maskable.png',
         'splash/iphone-se-640x1136.png',
         'splash/iphone8-750x1334.png',
         'splash/iphone8plus-1242x2208.png',
@@ -84,6 +88,7 @@ export default defineConfig(({ mode }) => {
           '**/*.{js,css,html,ico,png,svg,json,woff2,webmanifest}',
           'splash/**/*.png',
           'icons/**/*.png',
+          'branding/**/*.png',
         ],
         navigateFallback: '/index.html',
         navigateFallbackDenylist: [/^\/api/],
@@ -92,8 +97,9 @@ export default defineConfig(({ mode }) => {
             urlPattern: ({ request }) => request.destination === 'document',
             handler: 'NetworkFirst',
             options: {
-              cacheName: 'pages-cache-v3-splash',
-              networkTimeoutSeconds: 5,
+              cacheName: 'pages-cache-v4-offline',
+              networkTimeoutSeconds: 3,
+              cacheableResponse: { statuses: [0, 200] },
               expiration: {
                 maxEntries: 20,
                 maxAgeSeconds: 60 * 60 * 24 * 7,
@@ -103,11 +109,11 @@ export default defineConfig(({ mode }) => {
           {
             urlPattern: ({ request }) =>
               ['style', 'script', 'worker'].includes(request.destination),
-            handler: 'StaleWhileRevalidate',
+            handler: 'CacheFirst',
             options: {
-              cacheName: 'assets-cache-v3-splash',
+              cacheName: 'assets-cache-v4-offline',
               expiration: {
-                maxEntries: 100,
+                maxEntries: 120,
                 maxAgeSeconds: 60 * 60 * 24 * 30,
               },
             },
@@ -116,9 +122,9 @@ export default defineConfig(({ mode }) => {
             urlPattern: ({ request }) => request.destination === 'image',
             handler: 'CacheFirst',
             options: {
-              cacheName: 'images-cache-v3-splash',
+              cacheName: 'images-cache-v4-offline',
               expiration: {
-                maxEntries: 100,
+                maxEntries: 120,
                 maxAgeSeconds: 60 * 60 * 24 * 30,
               },
             },

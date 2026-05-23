@@ -13,6 +13,12 @@ import { clearSurveyQueryCache } from '../components/QueryProvider'
 import { queryClient } from '../lib/queryClient'
 import { prefetchAfterLogin } from '../lib/prefetch'
 import { clampRecordYearString } from '../recordYearConfig'
+import {
+  clearSessionSnapshot,
+  loadSessionSnapshot,
+  saveSessionSnapshot,
+} from '../utils/authSessionCache'
+import { isBrowserOffline, isLikelyOfflineRequestError } from '../utils/networkStatus'
 
 export type AuthUser = {
   id: string
@@ -93,6 +99,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setActiveInstrumentIdState(inst)
     if (inst) tokenStorage.setInstrumentId(inst)
     else tokenStorage.setInstrumentId(null)
+    saveSessionSnapshot({
+      user: payload.user,
+      company: payload.company,
+      companyAdmins: payload.companyAdmins ?? [],
+      instruments: payload.instruments,
+      managers: payload.managers,
+      activeInstrumentId: inst,
+    })
   }, [])
 
   const loadManagers = useCallback(async () => {
@@ -111,6 +125,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setManagers([])
       setIsLoading(false)
       return
+    }
+    if (isBrowserOffline()) {
+      const cached = loadSessionSnapshot()
+      if (cached) {
+        applySession(cached)
+        setToken(t)
+        setIsLoading(false)
+        return
+      }
     }
     setIsLoading(true)
     try {
@@ -156,11 +179,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         instruments,
       )
       void prefetchAfterLogin(queryClient, year, inst)
-    } catch {
-      tokenStorage.clear()
-      setToken(null)
-      setUser(null)
-      setCompanyAdmins([])
+    } catch (err) {
+      const status = axios.isAxiosError(err) ? err.response?.status : undefined
+      if (status === 401) {
+        clearSessionSnapshot()
+        tokenStorage.clear()
+        setToken(null)
+        setUser(null)
+        setCompanyAdmins([])
+        return
+      }
+      const cached = loadSessionSnapshot()
+      if (cached && tokenStorage.getToken() && isLikelyOfflineRequestError(err)) {
+        applySession(cached)
+        setToken(tokenStorage.getToken())
+        return
+      }
+      if (!isLikelyOfflineRequestError(err)) {
+        clearSessionSnapshot()
+        tokenStorage.clear()
+        setToken(null)
+        setUser(null)
+        setCompanyAdmins([])
+      }
     } finally {
       setIsLoading(false)
     }
@@ -172,6 +213,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const onUnauth = () => {
+      clearSessionSnapshot()
       tokenStorage.clear()
       setToken(null)
       setUser(null)
@@ -235,6 +277,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   )
 
   const logout = useCallback(() => {
+    clearSessionSnapshot()
     clearSurveyQueryCache()
     tokenStorage.clear()
     setToken(null)

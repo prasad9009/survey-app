@@ -13,6 +13,7 @@ initPwaInstallCapture()
 initPwaZoomLock()
 initIosKeyboardViewport()
 import App from './App.tsx'
+import { NetworkStatusShell } from './components/NetworkStatusShell'
 import { QueryProvider } from './components/QueryProvider'
 import { AuthProvider } from './context/AuthContext'
 import { RefreshProvider } from './context/RefreshContext'
@@ -31,7 +32,9 @@ createRoot(rootEl).render(
         <QueryProvider>
           <SelectedYearProvider>
             <RefreshProvider>
-              <AppBootstrap />
+              <NetworkStatusShell>
+                <AppBootstrap />
+              </NetworkStatusShell>
               <Toaster richColors position="top-center" />
             </RefreshProvider>
           </SelectedYearProvider>

@@ -7,8 +7,21 @@ const VERSION_KEY = 'surveyos:build-version'
 const AUTO_UPDATE_AFTER_MS = 15000
 const REGISTRATION_REFRESH_MS = 60000
 
-/** Runtime caches from before logo-bg2 splash rollout. */
-const LEGACY_RUNTIME_CACHES = ['pages-cache', 'assets-cache', 'images-cache']
+/** Runtime caches from older PWA builds — removed on version change. */
+const LEGACY_RUNTIME_CACHES = [
+  'pages-cache',
+  'assets-cache',
+  'images-cache',
+  'pages-cache-v3-splash',
+  'assets-cache-v3-splash',
+  'images-cache-v3-splash',
+]
+
+function isLegacyPwaCache(name: string) {
+  if (LEGACY_RUNTIME_CACHES.includes(name)) return true
+  if (name.startsWith('workbox-precache') && !name.includes('offline-v4')) return true
+  return name.includes('splash-v3') || name.includes('-v3-')
+}
 
 const BUILD_VERSION = (
   import.meta.env.VITE_APP_VERSION || __APP_BUILD_VERSION__ || 'dev-build'
@@ -28,9 +41,7 @@ export function usePwaUpdater() {
       if ('caches' in window) {
         void caches.keys().then((keys) => {
           for (const key of keys) {
-            if (LEGACY_RUNTIME_CACHES.includes(key)) {
-              void caches.delete(key)
-            }
+            if (isLegacyPwaCache(key)) void caches.delete(key)
           }
         })
       }
@@ -45,7 +56,7 @@ export function usePwaUpdater() {
     const updateServiceWorker = registerSW({
       immediate: true,
       onOfflineReady() {
-        toast.success('SurveyOS is ready to work offline.', { duration: 2800 })
+        console.info('[PWA] App shell cached for offline use.')
       },
       onNeedRefresh() {
         if (updateInProgress) return

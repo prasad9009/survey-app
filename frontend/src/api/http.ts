@@ -1,4 +1,5 @@
 import axios, { type AxiosError, type AxiosResponse, type InternalAxiosRequestConfig } from 'axios'
+import { isBrowserOffline } from '../utils/networkStatus'
 import { withDedup } from './dedup'
 
 const TOKEN_KEY = 'survey_access_token'
@@ -39,6 +40,7 @@ function sleep(ms: number) {
 }
 
 function isRetryableError(err: AxiosError): boolean {
+  if (isBrowserOffline()) return false
   if (err.code === 'ERR_NETWORK' || err.code === 'ECONNABORTED' || !err.response) return true
   const status = err.response.status
   return status === 502 || status === 503 || status === 504

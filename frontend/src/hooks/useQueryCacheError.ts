@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { toast } from 'sonner'
+import { useOnlineStatus } from './useOnlineStatus'
 
 const CACHE_ERROR_TOAST = 'Showing saved data. Could not fetch latest updates.'
 
@@ -9,11 +10,16 @@ export function useQueryCacheError(options: {
   hasCachedData: boolean
   enabled?: boolean
 }) {
+  const isOnline = useOnlineStatus()
   const { isError, hasCachedData, enabled = true } = options
+  const showToast = enabled && isOnline
   const toastedRef = useRef(false)
 
   useEffect(() => {
-    if (!enabled) return
+    if (!showToast) {
+      toastedRef.current = false
+      return
+    }
     if (isError && hasCachedData) {
       if (!toastedRef.current) {
         toastedRef.current = true
@@ -22,5 +28,5 @@ export function useQueryCacheError(options: {
     } else {
       toastedRef.current = false
     }
-  }, [isError, hasCachedData, enabled])
+  }, [isError, hasCachedData, showToast])
 }
