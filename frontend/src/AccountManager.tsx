@@ -20,6 +20,7 @@ import {
   Wallet,
   X,
 } from 'lucide-react'
+import { useQueryClient } from '@tanstack/react-query'
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Navigate, useLocation, useParams, useSearchParams, type NavigateFunction } from 'react-router-dom'
 import { AccountManagerSidebarBlock } from './AccountManagerSidebarBlock'
@@ -39,8 +40,10 @@ import {
 } from './dashboardCards'
 import { layoutBrandLogo } from './brandLogo'
 import { HeaderYearSelect } from './components/HeaderYearSelect'
+import { BackgroundRefreshIndicator } from './components/BackgroundRefreshIndicator'
 import { PageRefreshButton } from './components/PageRefreshButton'
-import { useRefresh } from './context/RefreshContext'
+import { useAccountManager } from './hooks/queries'
+import { invalidateAfterTransactionChange } from './lib/invalidate'
 import { toast } from 'sonner'
 import http from './api/http'
 import { signOut } from './signOut'
@@ -111,12 +114,9 @@ type LedgerSummary = {
 }
 
 export default function AccountManager({ onNavigate }: AccountManagerProps) {
-  const { user, company, managers } = useAuth()
-  const [ledgerMeta, setLedgerMeta] = useState<LedgerMeta | null>(null)
-  const [ledgerSummary, setLedgerSummary] = useState<LedgerSummary | null>(null)
-  const [ledgerLoadState, setLedgerLoadState] = useState<'loading' | 'ok' | 'error'>('loading')
+  const queryClient = useQueryClient()
+  const { user, company, managers, activeInstrumentId } = useAuth()
   const [isExporting, setIsExporting] = useState(false)
-  const prevManagerSlugRef = useRef<string | undefined>(undefined)
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const { managerId: managerIdFromRoute } = useParams<{ managerId: string }>()
   const [searchParams] = useSearchParams()
@@ -134,7 +134,21 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
 
   const location = useLocation()
   const { selectedYear, setSelectedYear } = useSelectedYear()
-  const { refreshTick } = useRefresh()
+  const {
+    manager: ledgerMeta,
+    summary: ledgerSummary,
+    accounts: accountRows,
+    transactions: transactionsRaw,
+    clientSites: clientSiteOptions,
+    isLoading: ledgerQueryLoading,
+    isFetching,
+    isError: ledgerQueryError,
+    hasData,
+  } = useAccountManager(managerIdFromRoute)
+
+  const ledgerLoadState: 'loading' | 'ok' | 'error' =
+    ledgerQueryLoading && !hasData ? 'loading' : ledgerQueryError && !hasData ? 'error' : 'ok'
+
   const appliedNavYearRef = useRef(false)
   const navState = location.state as
     | {
@@ -149,8 +163,6 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
     if (y && /^\d{4}$/.test(y)) setSelectedYear(y)
   }, [navState?.selectedYear, setSelectedYear])
 
-  const [accountRows, setAccountRows] = useState<AccountRow[]>([])
-  const [clientSiteOptions, setClientSiteOptions] = useState<Record<string, string[]>>({})
   const clientOptions = useMemo(() => {
     const fromAccounts = accountRows.map((r) => r.name)
     if (fromAccounts.length > 0) return fromAccounts
@@ -172,12 +184,22 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
     reason: '',
   }))
 
-  const [transactionsByManager, setTransactionsByManager] = useState<Record<string, Transaction[]>>({})
   const [deletingTxId, setDeletingTxId] = useState<string | null>(null)
   const [deleteConfirmTxId, setDeleteConfirmTxId] = useState<string | null>(null)
   const [viewingTxId, setViewingTxId] = useState<string | null>(null)
-  const routeKey = managerIdFromRoute ?? ''
-  const transactions = transactionsByManager[routeKey] ?? []
+  const transactions = useMemo(
+    () =>
+      transactionsRaw.map((tx) => ({
+        id: tx.id,
+        type: tx.type as TransactionType,
+        amount: tx.amount,
+        date: tx.date,
+        reason: tx.reason,
+        client: tx.client,
+        site: tx.site,
+      })),
+    [transactionsRaw],
+  )
 
   const deleteConfirmTransaction = useMemo(
     () => (deleteConfirmTxId ? transactions.find((t) => t.id === deleteConfirmTxId) : undefined),
@@ -203,77 +225,6 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
       setViewingTxId(null)
     }
   }, [viewingTxId, transactions])
-
-  useEffect(() => {
-    if (!managerIdFromRoute) return
-    let cancelled = false
-    const switchedManager = prevManagerSlugRef.current !== managerIdFromRoute
-    if (switchedManager) {
-      setLedgerLoadState('loading')
-      setLedgerMeta(null)
-      setLedgerSummary(null)
-      setAccountRows([])
-    }
-    ;(async () => {
-      try {
-        const yearParams = { year: selectedYear }
-        const [tRes, aRes, sRes] = await Promise.all([
-          http.get<{ ok: boolean; transactions: Array<{ id: string; type: string; amount: number; date: string; reason?: string; client?: string; site?: string }> }>(
-            `/api/transactions/${managerIdFromRoute}`,
-            { params: yearParams },
-          ),
-          http.get<{
-            ok: boolean
-            accounts: AccountRow[]
-            manager?: LedgerMeta
-            summary?: LedgerSummary
-          }>(`/api/account-managers/${managerIdFromRoute}/accounts`, { params: yearParams }),
-          http.get<{ ok: boolean; clientSites: Record<string, string[]> }>(
-            `/api/account-managers/${managerIdFromRoute}/client-sites`,
-          ),
-        ])
-        if (cancelled) return
-        if (!aRes.data?.ok) {
-          setLedgerLoadState('error')
-          return
-        }
-        if (aRes.data.manager) setLedgerMeta(aRes.data.manager)
-        else setLedgerMeta(null)
-        if (aRes.data.summary) setLedgerSummary(aRes.data.summary)
-        else setLedgerSummary(null)
-        if (tRes.data?.ok) {
-          setTransactionsByManager((prev) => ({
-            ...prev,
-            [managerIdFromRoute]: tRes.data.transactions.map((tx) => ({
-              id: tx.id,
-              type: tx.type as TransactionType,
-              amount: tx.amount,
-              date: tx.date,
-              reason: tx.reason,
-              client: tx.client,
-              site: tx.site,
-            })),
-          }))
-        }
-        if (aRes.data?.ok) setAccountRows(aRes.data.accounts)
-        if (sRes.data?.ok && sRes.data.clientSites) {
-          setClientSiteOptions(sRes.data.clientSites)
-        } else {
-          setClientSiteOptions({})
-        }
-        prevManagerSlugRef.current = managerIdFromRoute
-        setLedgerLoadState('ok')
-      } catch {
-        if (!cancelled) {
-          setLedgerLoadState('error')
-          toast.error('Could not load account data')
-        }
-      }
-    })()
-    return () => {
-      cancelled = true
-    }
-  }, [managerIdFromRoute, selectedYear, refreshTick])
 
   const managerFromSession = useMemo(
     () => managers.find((m) => m.id === managerIdFromRoute),
@@ -449,22 +400,8 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
         toast.error('Could not delete transaction')
         return
       }
-      setTransactionsByManager((prev) => ({
-        ...prev,
-        [managerIdFromRoute]: (prev[managerIdFromRoute] ?? []).filter((t) => t.id !== txId),
-      }))
-      try {
-        const aRes = await http.get<{
-          ok: boolean
-          accounts: AccountRow[]
-          summary?: LedgerSummary
-        }>(`/api/account-managers/${managerIdFromRoute}/accounts`, { params: { year: selectedYear } })
-        if (aRes.data?.ok) {
-          setAccountRows(aRes.data.accounts)
-          if (aRes.data.summary) setLedgerSummary(aRes.data.summary)
-        }
-      } catch {
-        /* list updated; balances refresh on next navigation if this fails */
+      if (managerIdFromRoute) {
+        invalidateAfterTransactionChange(queryClient, managerIdFromRoute, selectedYear, activeInstrumentId)
       }
       toast.success('Transaction deleted')
       setDeleteConfirmTxId(null)
@@ -697,7 +634,10 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
                 <h1 className="min-w-0 truncate text-left text-base font-extrabold leading-tight tracking-tight text-white">
                   {pageTitle}
                 </h1>
-                <HeaderYearSelect variant="onDark" compact />
+                <div className="flex shrink-0 items-center gap-2">
+                  <BackgroundRefreshIndicator isFetching={isFetching} hasData={hasData} />
+                  <HeaderYearSelect variant="onDark" compact />
+                </div>
               </div>
             </div>
 
@@ -718,6 +658,7 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
               </div>
 
               <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+                <BackgroundRefreshIndicator isFetching={isFetching} hasData={hasData} />
                 <PageRefreshButton variant="onLight" />
                 <HeaderYearSelect variant="onLight" />
                 <div className="hidden items-center gap-3 rounded-xl bg-neutral-100 px-3 py-2 ring-1 ring-black/5 sm:flex sm:px-4 sm:py-2.5">
@@ -1029,33 +970,13 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
                           return
                         }
                         const tx = res.data.transaction
-                        const next: Transaction = {
-                          id: tx.id,
-                          type: tx.type as TransactionType,
-                          amount: tx.amount,
-                          date: tx.date,
-                          reason: tx.reason,
-                          client: tx.client,
-                          site: tx.site,
-                        }
-                        setTransactionsByManager((prev) => ({
-                          ...prev,
-                          [managerIdFromRoute]: [next, ...(prev[managerIdFromRoute] ?? [])],
-                        }))
-                        try {
-                          const aRes = await http.get<{
-                            ok: boolean
-                            accounts: AccountRow[]
-                            summary?: LedgerSummary
-                          }>(`/api/account-managers/${managerIdFromRoute}/accounts`, {
-                            params: { year: selectedYear },
-                          })
-                          if (aRes.data?.ok) {
-                            setAccountRows(aRes.data.accounts)
-                            if (aRes.data.summary) setLedgerSummary(aRes.data.summary)
-                          }
-                        } catch {
-                          /* balances refresh on next load */
+                        if (managerIdFromRoute) {
+                          invalidateAfterTransactionChange(
+                            queryClient,
+                            managerIdFromRoute,
+                            selectedYear,
+                            activeInstrumentId,
+                          )
                         }
                         toast.success('Transaction saved')
                         setIsAddOpen(false)

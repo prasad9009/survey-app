@@ -17,7 +17,7 @@ import {
   UsersRound,
   X,
 } from 'lucide-react'
-import { Fragment, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { Fragment, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useLocation } from 'react-router-dom'
 import { AccountManagerSidebarBlock } from './AccountManagerSidebarBlock'
 import { CollaborationBrandMark } from './CollaborationBrandMark'
@@ -26,11 +26,10 @@ import { CardShell, StatCard } from './dashboardCards'
 import { AppSelect } from './components/AppSelect'
 import { layoutBrandLogo } from './brandLogo'
 import { HeaderYearSelect } from './components/HeaderYearSelect'
+import { BackgroundRefreshIndicator } from './components/BackgroundRefreshIndicator'
 import { PageRefreshButton } from './components/PageRefreshButton'
-import { usePageRefresh } from './context/RefreshContext'
+import { useReports } from './hooks/queries'
 import { useSelectedYear } from './context/SelectedYearContext'
-import { toast } from 'sonner'
-import http from './api/http'
 import { signOut } from './signOut'
 
 type NavItem = {
@@ -83,38 +82,28 @@ export default function Reports({ onNavigate }: ReportsProps) {
   const [machineType, setMachineType] = useState<string>('Total Station')
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<'all' | ReportRow['status']>('all')
-  const [reportRows, setReportRows] = useState<ReportRow[]>([])
-
   useEffect(() => {
     setFromDate(`${selectedYear}-01-01`)
     setToDate(`${selectedYear}-12-31`)
   }, [selectedYear])
 
-  const loadReportRows = useCallback(async () => {
-    try {
-      const res = await http.get<{
-        ok: boolean
-        rows: ReportRow[]
-      }>('/api/reports/rows', {
-        params: {
-          reportType,
-          clientFilter,
-          siteFilter,
-          fromDate,
-          toDate,
-          machineType,
-          searchQuery,
-          statusFilter,
-        },
-      })
-      if (res.data?.ok) setReportRows(res.data.rows ?? [])
-      else toast.error('Could not load report')
-    } catch {
-      toast.error('Could not load report')
-    }
-  }, [reportType, clientFilter, siteFilter, fromDate, toDate, machineType, searchQuery, statusFilter])
+  const reportFilters = useMemo(
+    () => ({
+      reportType,
+      clientFilter,
+      siteFilter,
+      fromDate,
+      toDate,
+      machineType,
+      searchQuery,
+      statusFilter,
+    }),
+    [reportType, clientFilter, siteFilter, fromDate, toDate, machineType, searchQuery, statusFilter],
+  )
 
-  usePageRefresh(() => loadReportRows(), [loadReportRows])
+  const reportsQuery = useReports(reportFilters)
+  const reportRows = reportsQuery.data ?? []
+  const hasReportsData = reportsQuery.data !== undefined
 
   const navItems: NavItem[] = [
     { label: 'Dashboard', icon: <LayoutGrid size={16} /> },
@@ -392,7 +381,10 @@ export default function Reports({ onNavigate }: ReportsProps) {
                 <h1 className="min-w-0 truncate text-left text-base font-extrabold leading-tight tracking-tight text-white">
                   Reports
                 </h1>
-                <HeaderYearSelect variant="onDark" compact />
+                <div className="flex shrink-0 items-center gap-2">
+                  <BackgroundRefreshIndicator isFetching={reportsQuery.isFetching} hasData={hasReportsData} />
+                  <HeaderYearSelect variant="onDark" compact />
+                </div>
               </div>
             </div>
 
@@ -412,6 +404,7 @@ export default function Reports({ onNavigate }: ReportsProps) {
               </div>
 
               <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+                <BackgroundRefreshIndicator isFetching={reportsQuery.isFetching} hasData={hasReportsData} />
                 <PageRefreshButton variant="onLight" />
                 <HeaderYearSelect variant="onLight" />
                 <div className="hidden items-center gap-3 rounded-xl bg-neutral-100 px-3 py-2 ring-1 ring-black/5 sm:flex sm:px-4 sm:py-2.5">

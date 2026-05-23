@@ -12,6 +12,7 @@ initPwaInstallCapture()
 initPwaZoomLock()
 initIosKeyboardViewport()
 import App from './App.tsx'
+import { QueryProvider } from './components/QueryProvider'
 import { AuthProvider } from './context/AuthContext'
 import { RefreshProvider } from './context/RefreshContext'
 import { SelectedYearProvider } from './context/SelectedYearContext'
@@ -25,12 +26,14 @@ createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <BrowserRouter>
       <AuthProvider>
-        <SelectedYearProvider>
-          <RefreshProvider>
-            <AppBootstrap />
-            <Toaster richColors position="top-center" />
-          </RefreshProvider>
-        </SelectedYearProvider>
+        <QueryProvider>
+          <SelectedYearProvider>
+            <RefreshProvider>
+              <AppBootstrap />
+              <Toaster richColors position="top-center" />
+            </RefreshProvider>
+          </SelectedYearProvider>
+        </QueryProvider>
       </AuthProvider>
     </BrowserRouter>
   </StrictMode>,

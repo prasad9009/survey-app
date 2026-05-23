@@ -23,7 +23,10 @@ import {
   type ReactNode,
 } from 'react'
 import { useLocation } from 'react-router-dom'
+import { useQueryClient } from '@tanstack/react-query'
 import http from './api/http'
+import { useSettings } from './hooks/queries'
+import { invalidateAfterSettingsChange } from './lib/invalidate'
 import { AccountManagerSidebarBlock } from './AccountManagerSidebarBlock'
 import { layoutBrandLogo } from './brandLogo'
 import { CollaborationBrandMark } from './CollaborationBrandMark'
@@ -32,7 +35,7 @@ import { CardShell } from './dashboardCards'
 import { AppSelect } from './components/AppSelect'
 import { HeaderYearSelect } from './components/HeaderYearSelect'
 import { PageRefreshButton } from './components/PageRefreshButton'
-import { useRefresh } from './context/RefreshContext'
+import { BackgroundRefreshIndicator } from './components/BackgroundRefreshIndicator'
 import { useAuth } from './context/AuthContext'
 import { getApiErrorMessage } from './api/request'
 import { signOut } from './signOut'
@@ -133,10 +136,12 @@ function Field({
 }
 
 export default function Settings({ onNavigate }: SettingsProps) {
+  const queryClient = useQueryClient()
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const { pathname } = useLocation()
-  const { refreshTick } = useRefresh()
   const { user } = useAuth()
+  const { companyQuery, meQuery, isLoading: settingsQueryLoading, isFetching: settingsFetching, hasData: settingsHasData } =
+    useSettings()
   const isSuperAdmin = user?.role === 'super_admin'
   const displayName = user?.fullName?.trim() || user?.email || 'User'
   const companyLocked = !isSuperAdmin
@@ -208,60 +213,9 @@ export default function Settings({ onNavigate }: SettingsProps) {
   const storagePercent =
     storageQuotaBytes > 0 ? Math.min(100, Math.round((storageUsedBytes / storageQuotaBytes) * 100)) : 0
 
-  const loadSettings = useCallback(async () => {
-    setPageLoading(true)
+  const applySettingsFromCache = useCallback(() => {
     try {
-      const [coRes, meRes] = await Promise.all([
-        http.get<{
-          ok: boolean
-          company: {
-            name: string
-            ownerName?: string
-            contactPhone?: string
-            email?: string
-            officeAddress?: string
-            gstNumber?: string
-            settings?: {
-              currency?: string
-              dateFormat?: string
-              defaultInstrumentTypeLabel?: string
-              notificationsEnabled?: boolean
-              autoBackupEnabled?: boolean
-            }
-            invoiceDefaults?: {
-              theme?: string
-              footerNote?: string
-              signatureUrl?: string | null
-              stampUrl?: string | null
-            }
-            branding?: { logoUrl?: string | null }
-            storage?: {
-              usedBytes: number
-              quotaBytes: number
-              lastBackupAt?: string | null
-              fileCount: number
-            }
-          }
-        }>('/api/settings/company'),
-        http.get<{
-          ok: boolean
-          email: string
-          profile?: { fullName?: string; phone?: string }
-          preferences?: { theme?: string; language?: string }
-          bankDetails?: {
-            accountName?: string
-            accountNumber?: string
-            ifscCode?: string
-            bankName?: string
-            branch?: string
-            upiPhone?: string
-            invoiceSlot?: number
-          }
-          bankSignatureUrl?: string | null
-        }>('/api/settings/me'),
-      ])
-
-      const c = coRes.data?.company
+      const c = companyQuery.data
       if (c) {
         setCompanyName(c.name ?? '')
         setOwnerName(c.ownerName ?? '')
@@ -293,7 +247,7 @@ export default function Settings({ onNavigate }: SettingsProps) {
         }
       }
 
-      const me = meRes.data
+      const me = meQuery.data
       if (
         me?.preferences?.theme === 'light' ||
         me?.preferences?.theme === 'dark' ||
@@ -323,14 +277,23 @@ export default function Settings({ onNavigate }: SettingsProps) {
       setBankSigPreview(me?.bankSignatureUrl ?? null)
     } catch (err) {
       notify.apiError(err, 'Could not load settings.')
-    } finally {
-      setPageLoading(false)
     }
-  }, [])
+  }, [companyQuery.data, meQuery.data])
 
   useEffect(() => {
-    void loadSettings()
-  }, [loadSettings, refreshTick])
+    if (settingsQueryLoading && !settingsHasData) {
+      setPageLoading(true)
+      return
+    }
+    if (companyQuery.data || meQuery.data) {
+      applySettingsFromCache()
+    }
+    setPageLoading(false)
+  }, [applySettingsFromCache, settingsQueryLoading, settingsHasData, companyQuery.data, meQuery.data])
+
+  const reloadSettings = useCallback(() => {
+    invalidateAfterSettingsChange(queryClient)
+  }, [queryClient])
 
   const handleLogoChange = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -360,7 +323,7 @@ export default function Settings({ onNavigate }: SettingsProps) {
       await http.post('/api/settings/company/logo', fd)
       URL.revokeObjectURL(nextUrl)
       setLogoObjectUrl(null)
-      await loadSettings()
+      reloadSettings()
       notify.dismiss(toastId)
       notify.success('Logo uploaded successfully.')
     } catch (err) {
@@ -473,7 +436,7 @@ export default function Settings({ onNavigate }: SettingsProps) {
       const fd = new FormData()
       fd.append('file', f)
       await http.post('/api/settings/company/invoice-signature', fd)
-      await loadSettings()
+      reloadSettings()
       notify.dismiss(toastId)
       notify.success('Signature uploaded.')
     } catch (err) {
@@ -500,7 +463,7 @@ export default function Settings({ onNavigate }: SettingsProps) {
       const fd = new FormData()
       fd.append('file', f)
       await http.post('/api/settings/me/bank-signature', fd)
-      await loadSettings()
+      reloadSettings()
       notify.dismiss(toastId)
       notify.success('Bank signature uploaded.')
     } catch (err) {
@@ -530,7 +493,7 @@ export default function Settings({ onNavigate }: SettingsProps) {
       const fd = new FormData()
       fd.append('file', f)
       await http.post('/api/settings/company/invoice-stamp', fd)
-      await loadSettings()
+      reloadSettings()
       notify.dismiss(toastId)
       notify.success('Stamp uploaded.')
     } catch (err) {
@@ -599,7 +562,7 @@ export default function Settings({ onNavigate }: SettingsProps) {
   }
 
   const handleCancel = () => {
-    void loadSettings()
+    applySettingsFromCache()
   }
 
   const handleSaveSettings = async () => {
@@ -644,7 +607,7 @@ export default function Settings({ onNavigate }: SettingsProps) {
       }
       notify.dismiss(toastId)
       notify.success('Settings saved successfully.')
-      await loadSettings()
+      reloadSettings()
     } catch (err) {
       notify.dismiss(toastId)
       notify.apiError(err, 'Could not save settings.')
@@ -657,7 +620,7 @@ export default function Settings({ onNavigate }: SettingsProps) {
     if (!isSuperAdmin) return
     try {
       await http.post('/api/settings/company/backup')
-      await loadSettings()
+      reloadSettings()
       notify.success('Backup recorded.')
     } catch (err) {
       notify.apiError(err, 'Could not record backup.')
@@ -876,7 +839,10 @@ export default function Settings({ onNavigate }: SettingsProps) {
                 <h1 className="min-w-0 truncate text-left text-base font-extrabold leading-tight tracking-tight text-white">
                   Settings
                 </h1>
-                <HeaderYearSelect variant="onDark" compact />
+                <div className="flex shrink-0 items-center gap-2">
+                  <BackgroundRefreshIndicator isFetching={settingsFetching} hasData={settingsHasData} />
+                  <HeaderYearSelect variant="onDark" compact />
+                </div>
               </div>
             </div>
 
@@ -896,6 +862,7 @@ export default function Settings({ onNavigate }: SettingsProps) {
               </div>
 
               <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+                <BackgroundRefreshIndicator isFetching={settingsFetching} hasData={settingsHasData} />
                 <PageRefreshButton variant="onLight" />
                 <HeaderYearSelect variant="onLight" />
                 <div className="hidden items-center gap-3 rounded-xl bg-neutral-100 px-3 py-2 ring-1 ring-black/5 sm:flex sm:px-4 sm:py-2.5">

@@ -18,6 +18,7 @@ import {
   IndianRupee,
   Trash2,
 } from 'lucide-react'
+import { useQueryClient } from '@tanstack/react-query'
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useLocation } from 'react-router-dom'
 import {
@@ -32,8 +33,10 @@ import {
 import { AccountManagerSidebarBlock } from './AccountManagerSidebarBlock'
 import { AddSiteForm } from './AddSiteForm'
 import { HeaderYearSelect } from './components/HeaderYearSelect'
+import { BackgroundRefreshIndicator } from './components/BackgroundRefreshIndicator'
 import { PageRefreshButton } from './components/PageRefreshButton'
-import { useRefresh } from './context/RefreshContext'
+import { useClientsAndSites } from './hooks/queries'
+import { invalidateAfterClientChange, invalidateAfterSiteChange } from './lib/invalidate'
 import { CollaborationBrandMark } from './CollaborationBrandMark'
 import { LayoutFooter } from './LayoutFooter'
 import { useSelectedYear } from './context/SelectedYearContext'
@@ -111,13 +114,12 @@ type ClientsSitesProps = {
 }
 
 export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
-  const { token, user, activeInstrumentId, company, companyAdmins, managers } = useAuth()
+  const queryClient = useQueryClient()
+  const { user, activeInstrumentId, company, companyAdmins, managers } = useAuth()
   const { selectedYear } = useSelectedYear()
-  const { refreshTick } = useRefresh()
+  const { clients, clientSitesMap, isLoading, isFetching, isError, hasData } = useClientsAndSites()
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const [query, setQuery] = useState('')
-  const [clients, setClients] = useState<ClientRow[]>([])
-  const [clientSitesMap, setClientSitesMap] = useState<Record<string, SiteRow[]>>({})
   const [selectedClientName, setSelectedClientName] = useState<string | null>(null)
   const [isAddClientModalOpen, setIsAddClientModalOpen] = useState(false)
   const [isAddSiteModalOpen, setIsAddSiteModalOpen] = useState(false)
@@ -137,76 +139,6 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
   const [exportBusy, setExportBusy] = useState(false)
   const prevSelectedClientNameRef = useRef<string | null>(null)
   const location = useLocation()
-
-  const refreshClientsAndSites = useCallback(async () => {
-    if (!token) return
-    const scopeParams = { year: selectedYear, ...(activeInstrumentId ? { instrumentId: activeInstrumentId } : {}) }
-    try {
-      const [cRes, sRes] = await Promise.all([
-        http.get<{
-          ok: boolean
-          clients: Array<{
-            id: string
-            name: string
-            phone: string
-            adminId?: string
-            sites: number
-            revenue: string
-            received: string
-            pending: string
-          }>
-        }>('/api/clients', { params: scopeParams }),
-        http.get<{
-          ok: boolean
-          sites: Array<{
-            id: string
-            clientName: string
-            name: string
-            location: string
-            lastVisit: string
-            status: string
-            received: string
-            pending: string
-          }>
-        }>('/api/sites', { params: scopeParams }),
-      ])
-      if (cRes.data?.ok) {
-        setClients(
-          cRes.data.clients.map((c) => ({
-            id: c.id,
-            name: c.name,
-            phone: c.phone,
-            sites: c.sites,
-            revenue: c.revenue,
-            received: c.received,
-            pending: c.pending,
-          })),
-        )
-      }
-      const grouped: Record<string, SiteRow[]> = {}
-      if (sRes.data?.ok) {
-        for (const s of sRes.data.sites) {
-          if (!grouped[s.clientName]) grouped[s.clientName] = []
-          grouped[s.clientName].push({
-            id: s.id,
-            name: s.name,
-            location: s.location,
-            lastVisit: s.lastVisit,
-            status: s.status as SiteRow['status'],
-            received: s.received ?? '₹0',
-            pending: s.pending,
-          })
-        }
-      }
-      setClientSitesMap(grouped)
-    } catch {
-      toast.error('Could not load clients or sites.')
-    }
-  }, [token, selectedYear, refreshTick, activeInstrumentId])
-
-  useEffect(() => {
-    void refreshClientsAndSites()
-  }, [refreshClientsAndSites])
 
   const searchParams = new URLSearchParams(location.search)
   const summary = searchParams.get('summary') ?? ''
@@ -459,7 +391,7 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
         return
       }
       toast.success('Client created')
-      await refreshClientsAndSites()
+      invalidateAfterClientChange(queryClient, selectedYear, activeInstrumentId)
       setSelectedClientName(null)
       setQuery('')
       handleCloseAddClientModal()
@@ -668,7 +600,7 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
       const n = res.data.sitesDeleted ?? 0
       toast.success(n > 0 ? `Client deleted (${n} site${n === 1 ? '' : 's'} removed).` : 'Client deleted.')
       setPendingDeleteClient(null)
-      await refreshClientsAndSites()
+      invalidateAfterClientChange(queryClient, selectedYear, activeInstrumentId)
       if (selectedClient?.id === row.id) {
         handleBackFromClientDetails()
       }
@@ -695,7 +627,7 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
       }
       toast.success(`Site "${target.name}" deleted.`)
       setPendingDeleteSite(null)
-      await refreshClientsAndSites()
+      invalidateAfterSiteChange(queryClient, selectedYear, activeInstrumentId)
     } catch (e) {
       const msg =
         axios.isAxiosError(e) && (e.response?.data as { error?: string })?.error
@@ -935,6 +867,7 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
                   </h1>
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
+                  <BackgroundRefreshIndicator isFetching={isFetching} hasData={hasData} />
                   {selectedClient ? <PageRefreshButton variant="onDark" /> : null}
                   <HeaderYearSelect variant="onDark" compact />
                 </div>
@@ -966,6 +899,7 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
               </div>
 
               <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+                <BackgroundRefreshIndicator isFetching={isFetching} hasData={hasData} />
                 <PageRefreshButton variant="onLight" />
                 <HeaderYearSelect variant="onLight" />
                 <div className="hidden items-center gap-3 rounded-xl bg-neutral-100 px-3 py-2 ring-1 ring-black/5 sm:flex sm:px-4 sm:py-2.5">
@@ -984,6 +918,14 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
           </header>
 
           <div className="mobile-main-scroll-pad min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-white px-4 pt-2 sm:px-6 sm:pt-3 md:px-6 md:pt-4 lg:px-8 lg:pt-4">
+            {isLoading && !hasData ? (
+              <p className="py-8 text-center text-sm font-semibold text-neutral-500">Loading clients and sites…</p>
+            ) : null}
+            {isError && !hasData ? (
+              <p className="py-8 text-center text-sm font-semibold text-rose-600">
+                Could not load clients or sites. Check your connection and try refresh.
+              </p>
+            ) : null}
             {selectedClient ? (
               <section className="rounded-xl border border-neutral-200 bg-white p-3 shadow-sm ring-1 ring-black/5 md:rounded-2xl md:p-4 md:shadow-[0_10px_30px_rgba(16,24,40,0.06)] md:ring-0">
                 <div className="text-sm font-semibold text-neutral-600">
@@ -1883,7 +1825,7 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
                     throw new Error('save site failed')
                   }
                   toast.success('Site saved')
-                  await refreshClientsAndSites()
+                  invalidateAfterSiteChange(queryClient, selectedYear, activeInstrumentId)
                 }}
               />
             </div>

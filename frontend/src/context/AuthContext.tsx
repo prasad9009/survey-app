@@ -9,6 +9,10 @@ import {
 } from 'react'
 import axios from 'axios'
 import http, { tokenStorage } from '../api/http'
+import { clearSurveyQueryCache } from '../components/QueryProvider'
+import { queryClient } from '../lib/queryClient'
+import { prefetchAfterLogin } from '../lib/prefetch'
+import { clampRecordYearString } from '../recordYearConfig'
 
 export type AuthUser = {
   id: string
@@ -145,6 +149,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         ),
       })
       setToken(t)
+      const year = clampRecordYearString(String(new Date().getFullYear()))
+      const inst = resolveActiveInstrumentId(
+        res.data.activeInstrumentId ?? null,
+        tokenStorage.getInstrumentId(),
+        instruments,
+      )
+      void prefetchAfterLogin(queryClient, year, inst)
     } catch {
       tokenStorage.clear()
       setToken(null)
@@ -197,18 +208,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           mgrs = []
         }
         const instruments = res.data.instruments ?? []
+        const activeId = resolveActiveInstrumentId(
+          res.data.activeInstrumentId ?? null,
+          tokenStorage.getInstrumentId(),
+          instruments,
+        )
         applySession({
           user: res.data.user,
           company: res.data.company,
           companyAdmins: res.data.companyAdmins,
           instruments,
           managers: mgrs,
-          activeInstrumentId: resolveActiveInstrumentId(
-            res.data.activeInstrumentId ?? null,
-            tokenStorage.getInstrumentId(),
-            instruments,
-          ),
+          activeInstrumentId: activeId,
         })
+        const year = clampRecordYearString(String(new Date().getFullYear()))
+        void prefetchAfterLogin(queryClient, year, activeId)
       } catch (err) {
         if (axios.isAxiosError(err)) {
           const msg = (err.response?.data as { error?: string } | undefined)?.error ?? 'Login failed'
@@ -221,6 +235,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   )
 
   const logout = useCallback(() => {
+    clearSurveyQueryCache()
     tokenStorage.clear()
     setToken(null)
     setUser(null)

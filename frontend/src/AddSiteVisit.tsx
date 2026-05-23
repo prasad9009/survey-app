@@ -40,8 +40,11 @@ import { AppSelect } from './components/AppSelect'
 import { isAxiosError } from 'axios'
 import { layoutBrandLogo } from './brandLogo'
 import { HeaderYearSelect } from './components/HeaderYearSelect'
+import { BackgroundRefreshIndicator } from './components/BackgroundRefreshIndicator'
 import { PageRefreshButton } from './components/PageRefreshButton'
-import { usePageRefresh } from './context/RefreshContext'
+import { useClients, useSites, useSiteVisits } from './hooks/queries'
+import { invalidateAfterVisitChange } from './lib/invalidate'
+import { useQueryClient } from '@tanstack/react-query'
 import { getHeaderDateLabel } from './headerDateLabel'
 import { toast } from 'sonner'
 import http from './api/http'
@@ -130,14 +133,14 @@ function defaultBillingLines(): BillingLineDraft[] {
 }
 
 export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
-  const { token, user, activeInstrumentId } = useAuth()
+  const queryClient = useQueryClient()
+  const { user, activeInstrumentId } = useAuth()
   const { selectedYear } = useSelectedYear()
   const { pathname, search } = useLocation()
+  const clientsQuery = useClients()
+  const sitesQuery = useSites()
+  const visitsQuery = useSiteVisits()
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
-  const [clientOptions, setClientOptions] = useState<string[]>([])
-  const [sitesByClient, setSitesByClient] = useState<Record<string, string[]>>({})
-  const [apiSites, setApiSites] = useState<ApiSite[]>([])
-  const [visitRecords, setVisitRecords] = useState<VisitRecord[]>([])
   const [visitListSearch, setVisitListSearch] = useState('')
   const [visitPaymentStatusFilter, setVisitPaymentStatusFilter] = useState('all')
   const [pendingDeleteVisit, setPendingDeleteVisit] = useState<VisitRecord | null>(null)
@@ -168,50 +171,34 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
   const requestedClient = searchParams.get('client')
   const requestedSiteName = searchParams.get('name')
 
-  const loadData = useCallback(async () => {
-    if (!token) return
-    try {
-      const scopeParams = { year: selectedYear, ...(activeInstrumentId ? { instrumentId: activeInstrumentId } : {}) }
-      const [cRes, sRes, vRes] = await Promise.all([
-        http.get<{ ok: boolean; clients: Array<{ name: string }> }>('/api/clients', { params: scopeParams }),
-        http.get<{
-          ok: boolean
-          sites: Array<{
-            id: string
-            clientName: string
-            name: string
-            location?: string
-            instrumentName?: string
-            instrumentCategory?: string
-          }>
-        }>('/api/sites', { params: scopeParams }),
-        http.get<{ ok: boolean; visits: VisitRecord[] }>('/api/visits', { params: scopeParams }),
-      ])
-      const names = cRes.data?.ok ? cRes.data.clients.map((c) => c.name) : []
-      setClientOptions(names)
-      const grouped: Record<string, string[]> = {}
-      const flat: ApiSite[] = []
-      if (sRes.data?.ok) {
-        for (const s of sRes.data.sites) {
-          if (!grouped[s.clientName]) grouped[s.clientName] = []
-          grouped[s.clientName].push(s.name)
-          flat.push({
-            id: s.id,
-            clientName: s.clientName,
-            name: s.name,
-            location: s.location && s.location !== '—' ? s.location : undefined,
-          })
-        }
-      }
-      setSitesByClient(grouped)
-      setApiSites(flat)
-      if (vRes.data?.ok) setVisitRecords(vRes.data.visits)
-    } catch {
-      toast.error('Could not load visits data')
-    }
-  }, [token, selectedYear, activeInstrumentId])
+  const clientOptions = useMemo(
+    () => (clientsQuery.data ?? []).map((c) => c.name),
+    [clientsQuery.data],
+  )
 
-  usePageRefresh(loadData, [loadData])
+  const { sitesByClient, apiSites } = useMemo(() => {
+    const grouped: Record<string, string[]> = {}
+    const flat: ApiSite[] = []
+    for (const s of sitesQuery.data ?? []) {
+      if (!grouped[s.clientName]) grouped[s.clientName] = []
+      grouped[s.clientName].push(s.name)
+      flat.push({
+        id: s.id,
+        clientName: s.clientName,
+        name: s.name,
+        location: s.location && s.location !== '—' ? s.location : undefined,
+        instrumentName: s.instrumentName,
+        instrumentCategory: s.instrumentCategory,
+      })
+    }
+    return { sitesByClient: grouped, apiSites: flat }
+  }, [sitesQuery.data])
+
+  const visitRecords = (visitsQuery.data ?? []) as VisitRecord[]
+  const listLoading = visitsQuery.isLoading && visitsQuery.data === undefined
+  const listFetching = visitsQuery.isFetching || clientsQuery.isFetching || sitesQuery.isFetching
+  const hasListData =
+    visitsQuery.data !== undefined || clientsQuery.data !== undefined || sitesQuery.data !== undefined
 
   useEffect(() => {
     const s = apiSites.find((x) => x.clientName === client && x.name === site)
@@ -324,7 +311,7 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
       if (mode === 'add') {
         onNavigate('/site-visits')
       }
-      await loadData()
+      invalidateAfterVisitChange(queryClient, selectedYear, activeInstrumentId)
     } catch {
       toast.error('Could not delete visit')
     } finally {
@@ -570,7 +557,10 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
                 <h1 className="min-w-0 truncate text-left text-base font-extrabold leading-tight tracking-tight text-white">
                   Site Visits
                 </h1>
-                <HeaderYearSelect variant="onDark" compact />
+                <div className="flex shrink-0 items-center gap-2">
+                  <BackgroundRefreshIndicator isFetching={listFetching} hasData={hasListData} />
+                  <HeaderYearSelect variant="onDark" compact />
+                </div>
               </div>
             </div>
             <div className="relative hidden w-full items-center justify-between gap-4 border-b border-neutral-200 bg-white px-4 py-2.5 shadow-[0_6px_20px_rgba(16,24,40,0.05)] sm:px-6 md:flex md:px-6 md:py-4 lg:px-8">
@@ -589,6 +579,7 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
               </div>
 
               <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+                <BackgroundRefreshIndicator isFetching={listFetching} hasData={hasListData} />
                 <PageRefreshButton variant="onLight" />
                 <HeaderYearSelect variant="onLight" />
                 <div className="hidden items-center gap-3 rounded-xl bg-neutral-100 px-3 py-2 ring-1 ring-black/5 sm:flex sm:px-4 sm:py-2.5">
@@ -997,7 +988,7 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
                       const v = res.data.visit
                       const visitMongoId = v._id
                       toast.success('Visit saved')
-                      await loadData()
+                      invalidateAfterVisitChange(queryClient, selectedYear, activeInstrumentId)
                       const params = new URLSearchParams({
                         mode: 'visit',
                         visitId: v.id,

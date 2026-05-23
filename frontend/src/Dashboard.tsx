@@ -16,10 +16,11 @@ import {
   Phone,
   UsersRound,
 } from 'lucide-react'
-import { Fragment, useEffect, useState, type ReactNode } from 'react'
+import { Fragment, useMemo, useState, type ReactNode } from 'react'
 import { useLocation } from 'react-router-dom'
-import http from './api/http'
 import { useAuth } from './context/AuthContext'
+import { BackgroundRefreshIndicator } from './components/BackgroundRefreshIndicator'
+import { useDashboardStats } from './hooks/queries'
 import { AccountManagerSidebarBlock } from './AccountManagerSidebarBlock'
 import { CollaborationBrandMark } from './CollaborationBrandMark'
 import { LayoutFooter } from './LayoutFooter'
@@ -27,7 +28,6 @@ import { CardShell, StatCard } from './dashboardCards'
 import { layoutBrandLogo } from './brandLogo'
 import { HeaderYearSelect } from './components/HeaderYearSelect'
 import { PageRefreshButton } from './components/PageRefreshButton'
-import { useRefresh } from './context/RefreshContext'
 import { useSelectedYear } from './context/SelectedYearContext'
 import { signOut } from './signOut'
 
@@ -65,58 +65,27 @@ type RecentVisitRow = {
 }
 
 export default function Dashboard({ onNavigate }: DashboardProps) {
-  const { user, token, activeInstrumentId } = useAuth()
-  const { selectedYear } = useSelectedYear()
-  const { refreshTick } = useRefresh()
+  const { user } = useAuth()
+  useSelectedYear()
+  const { data, isLoading, isFetching, isError } = useDashboardStats()
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const { pathname } = useLocation()
-  const [recentVisits, setRecentVisits] = useState<RecentVisitRow[]>([])
-  const [pendingAmountByClient, setPendingAmountByClient] = useState<[string, string][]>([])
-  const [stats, setStats] = useState({
-    totalRevenue: '—',
-    received: '—',
-    pending: '—',
-    totalSites: '—',
-    totalClients: '—',
-  })
 
-  useEffect(() => {
-    if (!token) return
-    let cancelled = false
-    ;(async () => {
-      try {
-        const res = await http.get<{
-          ok: boolean
-          recentVisits: RecentVisitRow[]
-          pendingAmountByClient: [string, string][]
-          stats: {
-            totalRevenue: string
-            received: string
-            pending: string
-            totalSites: number
-            totalClients: number
-          }
-        }>('/api/dashboard', {
-          params: { year: selectedYear, ...(activeInstrumentId ? { instrumentId: activeInstrumentId } : {}) },
-        })
-        if (cancelled || !res.data?.ok) return
-        setRecentVisits(res.data.recentVisits ?? [])
-        setPendingAmountByClient(res.data.pendingAmountByClient ?? [])
-        setStats({
-          totalRevenue: res.data.stats?.totalRevenue ?? '—',
-          received: res.data.stats?.received ?? '—',
-          pending: res.data.stats?.pending ?? '—',
-          totalSites: String(res.data.stats?.totalSites ?? '—'),
-          totalClients: String(res.data.stats?.totalClients ?? '—'),
-        })
-      } catch {
-        /* offline or server down — keep placeholders */
-      }
-    })()
-    return () => {
-      cancelled = true
-    }
-  }, [token, selectedYear, refreshTick, activeInstrumentId])
+  const recentVisits = data?.recentVisits ?? []
+  const pendingAmountByClient = data?.pendingAmountByClient ?? []
+  const stats = useMemo(
+    () => ({
+      totalRevenue: data?.stats?.totalRevenue ?? '—',
+      received: data?.stats?.received ?? '—',
+      pending: data?.stats?.pending ?? '—',
+      totalSites: String(data?.stats?.totalSites ?? '—'),
+      totalClients: String(data?.stats?.totalClients ?? '—'),
+    }),
+    [data],
+  )
+
+  const showInitialLoader = isLoading && !data
+  const showLoadError = isError && !data
 
   const getVisitDetailsPath = (visit: RecentVisitRow) => {
     const params = new URLSearchParams({
@@ -366,7 +335,10 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
                 <h1 className="min-w-0 truncate text-left text-base font-extrabold leading-tight tracking-tight text-white">
                   Dashboard
                 </h1>
-                <HeaderYearSelect variant="onDark" compact />
+                <div className="flex shrink-0 items-center gap-2">
+                  <BackgroundRefreshIndicator isFetching={isFetching} hasData={Boolean(data)} />
+                  <HeaderYearSelect variant="onDark" compact />
+                </div>
               </div>
             </div>
 
@@ -386,6 +358,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
               </div>
 
               <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+                <BackgroundRefreshIndicator isFetching={isFetching} hasData={Boolean(data)} />
                 <PageRefreshButton variant="onLight" />
                 <HeaderYearSelect variant="onLight" />
                 <div className="hidden items-center gap-3 rounded-xl bg-neutral-100 px-3 py-2 ring-1 ring-black/5 sm:flex sm:px-4 sm:py-2.5">
@@ -406,6 +379,14 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
           </header>
 
           <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-white p-4 pb-[calc(3.65rem+max(12px,env(safe-area-inset-bottom,0px)))] sm:px-6 sm:pt-6 sm:pb-[calc(3.65rem+max(12px,env(safe-area-inset-bottom,0px)))] md:p-6 md:pb-24 lg:p-8 lg:pb-28">
+            {showInitialLoader ? (
+              <p className="py-8 text-center text-sm font-semibold text-neutral-500">Loading dashboard…</p>
+            ) : null}
+            {showLoadError ? (
+              <p className="py-8 text-center text-sm font-semibold text-rose-600">
+                Could not load dashboard. Check your connection and try refresh.
+              </p>
+            ) : null}
             {/* Summary cards */}
             <section className="grid grid-cols-2 gap-1.5 md:gap-4 xl:grid-cols-4">
               <button

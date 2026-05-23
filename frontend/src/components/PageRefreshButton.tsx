@@ -1,6 +1,8 @@
+import { useQueryClient } from '@tanstack/react-query'
 import { RefreshCw } from 'lucide-react'
 import { useState } from 'react'
 import { useRefresh } from '../context/RefreshContext'
+import { queryKeys } from '../lib/queryKeys'
 
 type PageRefreshButtonProps = {
   variant?: 'onDark' | 'onLight'
@@ -15,12 +17,14 @@ const variantClass: Record<NonNullable<PageRefreshButtonProps['variant']>, strin
 }
 
 export function PageRefreshButton({ variant = 'onDark', className = '' }: PageRefreshButtonProps) {
+  const queryClient = useQueryClient()
   const { requestRefresh, isRefreshing } = useRefresh()
   const [spinning, setSpinning] = useState(false)
 
   const handleClick = async () => {
     setSpinning(true)
     try {
+      await queryClient.invalidateQueries({ queryKey: queryKeys.all })
       await requestRefresh()
     } finally {
       window.setTimeout(() => setSpinning(false), 350)
