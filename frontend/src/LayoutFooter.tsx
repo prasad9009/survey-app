@@ -3,12 +3,11 @@ import { Mail, Phone } from 'lucide-react'
 import { layoutBrandLogo } from './brandLogo'
 import { useAuth } from './context/AuthContext'
 import { formatEngineerLine } from './utils/formatEngineerContact'
-import { instrumentScopedAdmins } from './utils/pdfAdminContacts'
 
 const DEFAULT_EMAIL = 'samarthlandsurveyors@gmail.com'
 
 export function LayoutFooter() {
-  const { company, companyAdmins, activeInstrumentId, isLoading } = useAuth()
+  const { company, companyAdmins, isLoading } = useAuth()
   const email = useMemo(() => {
     const e = company?.email && String(company.email).trim()
     return e || DEFAULT_EMAIL
@@ -16,10 +15,8 @@ export function LayoutFooter() {
 
   const adminsWithContact = useMemo(() => {
     if (isLoading) return []
-    return instrumentScopedAdmins(companyAdmins, activeInstrumentId).filter(
-      (a) => formatEngineerLine(a.fullName, a.phone).length > 0,
-    )
-  }, [companyAdmins, activeInstrumentId, isLoading])
+    return companyAdmins.filter((a) => formatEngineerLine(a.fullName, a.phone).length > 0)
+  }, [companyAdmins, isLoading])
 
   return (
     <footer className="fixed inset-x-0 bottom-0 z-50 hidden border-t border-white/10 bg-gradient-to-b from-[#050505] via-[#0b0b0b] to-[#040404] text-white shadow-[0_-12px_30px_rgba(0,0,0,0.3)] md:block">

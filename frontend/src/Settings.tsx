@@ -463,7 +463,7 @@ export default function Settings({ onNavigate }: SettingsProps) {
                 <BackgroundRefreshIndicator isFetching={settingsFetching} hasData={settingsHasData} />
                 <PageRefreshButton variant="onLight" />
                 <HeaderYearSelect variant="onLight" />
-                <div className="hidden items-center gap-3 rounded-xl bg-neutral-100 px-3 py-2 ring-1 ring-black/5 sm:flex sm:px-4 sm:py-2.5">
+                <div className="hidden items-center gap-3 rounded-xl bg-neutral-100 px-3 py-2 ring-1 ring-black/5 sm:flex md:hidden sm:px-4 sm:py-2.5">
                   <div className="grid h-9 w-9 place-items-center rounded-xl bg-[#f39b03]/15 text-[#f39b03]">
                     <CircleUserRound size={18} />
                   </div>
