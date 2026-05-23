@@ -38,7 +38,10 @@ export function AuthShell({ title, subtitle, children }) {
   return (
     <main
       className="relative min-h-screen overflow-hidden bg-cover bg-center"
-      style={{ backgroundImage: "url('/login-bg.png')" }}
+      style={{
+        backgroundImage:
+          "image-set(url('/login-bg.webp') type('image/webp'), url('/login-bg.png') type('image/png'))",
+      }}
     >
       <div className="absolute inset-0 bg-gradient-to-br from-[#020307]/72 via-[#050c16]/62 to-[#02050c]/74" />
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_80%_20%,rgba(243,155,3,0.10),transparent_42%),radial-gradient(circle_at_12%_80%,rgba(29,78,216,0.14),transparent_46%)]" />

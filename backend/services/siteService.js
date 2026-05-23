@@ -11,6 +11,7 @@ import { reconcileSiteCreditsForInstrument } from './visitCreditAllocation.js'
 import { visitDateRangeForYear } from '../utils/yearQuery.js'
 import { decAmount, effectivePaidAmount } from '../utils/visitPaymentMath.js'
 import * as uploadService from './uploadService.js'
+import { parsePagination } from '../utils/pagination.js'
 
 function formatInr(n) {
   return `₹${Math.round(n).toLocaleString('en-IN')}`
@@ -176,17 +177,20 @@ export async function listAllSites(req) {
     await reconcileSiteCreditsForInstrument(req.user.companyId, effectiveInstrumentId)
   }
   const visitYearRange = visitDateRangeForYear(req.query?.year)
+  const { limit, skip, paginated } = parsePagination(req.query, { defaultLimit: 500, maxLimit: 500 })
   const match = {
     companyId: req.user.companyId,
     ...(await sharedInstrumentOperationalScope(req)),
   }
-  const sites = await Site.find(match)
+  const baseQuery = Site.find(match)
     .select('name locationLabel address status lastVisitAt updatedAt clientId instrumentId')
     .populate('clientId', 'name')
     .populate('instrumentId', 'name category')
     .sort({ updatedAt: -1 })
-    .limit(500)
-    .lean()
+  const [total, sites] = await Promise.all([
+    paginated ? Site.countDocuments(match) : Promise.resolve(null),
+    baseQuery.skip(skip).limit(limit).lean(),
+  ])
   const out = []
   for (const s of sites) {
     const { received, pending } = await siteFinancials(s._id, visitYearRange, effectiveInstrumentId)
@@ -204,6 +208,9 @@ export async function listAllSites(req) {
       instrumentName: inst?.name ?? '',
       instrumentCategory: inst?.category ?? '',
     })
+  }
+  if (paginated && total != null) {
+    return { sites: out, meta: { total, page: Math.floor(skip / limit) + 1, limit } }
   }
   return out
 }

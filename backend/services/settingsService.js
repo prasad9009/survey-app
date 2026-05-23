@@ -7,6 +7,7 @@ import Site from '../models/Site.js'
 import * as uploadService from './uploadService.js'
 import { ApiError } from '../utils/ApiError.js'
 import { instrumentCoworkerAdminIdStrings } from '../utils/instrumentPeers.js'
+import { getCached, setCached, invalidateCachePrefix } from '../utils/shortCache.js'
 
 const SIGNATURE_MAX_BYTES = 1024 * 1024
 
@@ -105,6 +106,7 @@ export async function updateCompanySettings(req, body) {
     Object.assign(company.invoiceDefaults, body.invoiceDefaults)
   }
   await company.save()
+  invalidateCachePrefix(`invoice-header:${req.user.companyId}`)
   return { ok: true }
 }
 
@@ -144,20 +146,27 @@ export async function updateUserSettings(req, body) {
     user.markModified('bankDetails')
   }
   await user.save()
+  if (body.bankDetails) invalidateCachePrefix(`invoice-bank:${req.user.companyId}:`)
   return { ok: true }
 }
 
 /** Company letterhead text for PDF invoices (logo is always bundled `src/assets/logo.jpeg`). */
 export async function getInvoiceCompanyHeader(req) {
+  const cacheKey = `invoice-header:${req.user.companyId}`
+  const cached = getCached(cacheKey)
+  if (cached) return cached
+
   const company = await Company.findById(req.user.companyId).lean()
   if (!company) throw new ApiError(404, 'Company not found')
-  return {
+  const header = {
     companyName: company.name ?? '',
     email: company.email ?? '',
     officeAddress: company.officeAddress ?? '',
     gstNumber: (company.gstNumber ?? '').trim(),
     contactPhone: company.contactPhone ?? '',
   }
+  setCached(cacheKey, header)
+  return header
 }
 
 function readInvoiceInstrumentId(req) {
@@ -197,12 +206,17 @@ async function bankColumnForAdmin(companyId, adminId) {
  */
 export async function getInvoiceBankColumns(req) {
   const companyId = req.user.companyId
+  const instrumentId = readInvoiceInstrumentId(req) ?? ''
+  const cacheKey = `invoice-bank:${companyId}:${instrumentId}:${req.query?.leftAdminId ?? ''}:${req.query?.rightAdminId ?? ''}`
+  const cached = getCached(cacheKey)
+  if (cached) return cached
+
   let leftAdminId = req.query?.leftAdminId ? String(req.query.leftAdminId).trim() : ''
   let rightAdminId = req.query?.rightAdminId ? String(req.query.rightAdminId).trim() : ''
 
   if (!leftAdminId && !rightAdminId) {
-    const instrumentId = readInvoiceInstrumentId(req)
-    if (instrumentId) {
+    const scopedInstrumentId = readInvoiceInstrumentId(req)
+    if (scopedInstrumentId) {
       const peerIds = await instrumentCoworkerAdminIdStrings(req)
       if (peerIds?.size) {
         const ordered = orderPeerAdminIdsForInvoice(peerIds, req.user.id)
@@ -221,7 +235,9 @@ export async function getInvoiceBankColumns(req) {
     rightAdminId ? bankColumnForAdmin(companyId, rightAdminId) : Promise.resolve({ lines: [], signatureUrl: null }),
   ])
 
-  return { left, right }
+  const bankColumns = { left, right }
+  setCached(cacheKey, bankColumns)
+  return bankColumns
 }
 
 export async function attachUserBankSignature(req, file) {
@@ -244,6 +260,7 @@ export async function attachUserBankSignature(req, file) {
   if (!user) throw new ApiError(404, 'User not found')
   user.bankSignatureFileId = reg.id
   await user.save()
+  invalidateCachePrefix(`invoice-bank:${req.user.companyId}:`)
   return { ok: true, url: up.url, fileId: reg.id }
 }
 

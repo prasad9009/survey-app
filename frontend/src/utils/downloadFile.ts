@@ -51,11 +51,22 @@ export async function downloadBlob(blob: Blob, filename: string): Promise<void> 
   }
 }
 
+/** Release jsPDF page buffers after export to reduce retained memory. */
+export function releasePdfDocument(doc: unknown) {
+  if (!doc || typeof doc !== 'object') return
+  const internal = (doc as { internal?: { pages?: unknown[] } }).internal
+  if (internal?.pages) internal.pages.length = 0
+}
+
 /** Save a jsPDF document via blob download (PWA-safe). */
 export async function savePdf(doc: { output(type: 'blob'): Blob }, filename: string): Promise<void> {
   const name = filename.endsWith('.pdf') ? filename : `${filename}.pdf`
-  const blob = doc.output('blob')
-  await downloadBlob(blob, name)
+  try {
+    const blob = doc.output('blob')
+    await downloadBlob(blob, name)
+  } finally {
+    releasePdfDocument(doc)
+  }
 }
 
 /** CSV / Excel-friendly download (UTF-8 BOM). */

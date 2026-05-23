@@ -6,7 +6,7 @@ services:
     runtime: node
     plan: starter
     rootDir: backend
-    buildCommand: npm install
+    buildCommand: npm ci --omit=dev
     startCommand: npm start
     healthCheckPath: /health
     envVars:
@@ -17,6 +17,6 @@ services:
       - key: WEB_CONCURRENCY
         value: "1"
       # Set in Render dashboard to your Vercel URL (comma-separated if multiple):
-      # FRONTEND_ORIGIN=https://survey-app-chi-wheat.vercel.app,http://localhost:5173
+      # FRONTEND_ORIGIN=https://survey-app-frontend-two.vercel.app,http://localhost:5173
       - key: FRONTEND_ORIGIN
         sync: false

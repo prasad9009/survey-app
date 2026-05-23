@@ -27,18 +27,9 @@ export default defineConfig(({ mode }) => {
       includeAssets: [
         'favicon.png',
         'branding/logo-bg2.png',
-        'splash/logo-bg2.png',
         'icons/icon-192.png',
         'icons/icon-512.png',
         'icons/icon-512-maskable.png',
-        'splash/iphone-se-640x1136.png',
-        'splash/iphone8-750x1334.png',
-        'splash/iphone8plus-1242x2208.png',
-        'splash/iphonex-1125x2436.png',
-        'splash/iphone12-1170x2532.png',
-        'splash/iphone12max-1284x2778.png',
-        'splash/iphone14pro-1179x2556.png',
-        'splash/iphone14promax-1290x2796.png',
       ],
       manifest: {
         id: '/',
@@ -83,15 +74,24 @@ export default defineConfig(({ mode }) => {
         cleanupOutdatedCaches: true,
         clientsClaim: true,
         skipWaiting: true,
-        maximumFileSizeToCacheInBytes: 12 * 1024 * 1024,
+        maximumFileSizeToCacheInBytes: 2 * 1024 * 1024,
         globPatterns: [
-          '**/*.{js,css,html,ico,png,svg,json,woff2,webmanifest}',
-          'splash/**/*.png',
+          '**/*.{js,css,html,ico,svg,json,woff2,webmanifest}',
           'icons/**/*.png',
-          'branding/**/*.png',
+          'branding/logo-bg2.png',
+          'favicon.png',
+        ],
+        globIgnores: [
+          '**/splash/**',
+          '**/*.pdf',
+          '**/signatures/**',
+          '**/login-bg.*',
+          '**/survey-bg.*',
+          '**/samarth-logo.png',
+          '**/survey-machine-logo.png',
         ],
         navigateFallback: '/index.html',
-        navigateFallbackDenylist: [/^\/api/],
+        navigateFallbackDenylist: [/^\/api/, /\.pdf$/i, /\/reports?\//i],
         runtimeCaching: [
           {
             urlPattern: ({ request }) => request.destination === 'document',
@@ -101,7 +101,7 @@ export default defineConfig(({ mode }) => {
               networkTimeoutSeconds: 3,
               cacheableResponse: { statuses: [0, 200] },
               expiration: {
-                maxEntries: 20,
+                maxEntries: 8,
                 maxAgeSeconds: 60 * 60 * 24 * 7,
               },
             },
@@ -113,18 +113,19 @@ export default defineConfig(({ mode }) => {
             options: {
               cacheName: 'assets-cache-v4-offline',
               expiration: {
-                maxEntries: 120,
+                maxEntries: 48,
                 maxAgeSeconds: 60 * 60 * 24 * 30,
               },
             },
           },
           {
-            urlPattern: ({ request }) => request.destination === 'image',
+            urlPattern: ({ url }) =>
+              /\/(icons\/|branding\/logo-bg2\.png|favicon\.png)/i.test(url.pathname),
             handler: 'CacheFirst',
             options: {
-              cacheName: 'images-cache-v4-offline',
+              cacheName: 'icons-cache-v4-offline',
               expiration: {
-                maxEntries: 120,
+                maxEntries: 12,
                 maxAgeSeconds: 60 * 60 * 24 * 30,
               },
             },
@@ -133,13 +134,26 @@ export default defineConfig(({ mode }) => {
       },
     }),
   ],
+  esbuild: {
+    drop: mode === 'production' ? ['console', 'debugger'] : [],
+  },
   build: {
+    sourcemap: false,
+    cssCodeSplit: true,
+    target: 'es2020',
     reportCompressedSize: false,
+    chunkSizeWarningLimit: 600,
     rollupOptions: {
       output: {
-        manualChunks: {
-          vendor: ['react', 'react-dom', 'react-router-dom'],
-          ui: ['lucide-react'],
+        manualChunks(id) {
+          if (!id.includes('node_modules')) return
+          if (id.includes('jspdf')) return 'pdf'
+          if (id.includes('@tanstack')) return 'query'
+          if (id.includes('lucide-react')) return 'ui'
+          if (id.includes('axios')) return 'http'
+          if (id.includes('react-dom') || id.includes('react-router') || /\/react\//.test(id)) {
+            return 'vendor'
+          }
         },
       },
     },

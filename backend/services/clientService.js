@@ -13,6 +13,7 @@ import { resolveInstrumentScope, sharedInstrumentOperationalScope } from '../uti
 import { reconcileSiteCreditsForInstrument } from './visitCreditAllocation.js'
 import { decAmount, effectivePaidAmount } from '../utils/visitPaymentMath.js'
 import { visitDateRangeForYear } from '../utils/yearQuery.js'
+import { parsePagination } from '../utils/pagination.js'
 
 function formatInr(n) {
   return `₹${Math.round(n).toLocaleString('en-IN')}`
@@ -89,15 +90,16 @@ export async function listClients(req) {
     await reconcileSiteCreditsForInstrument(req.user.companyId, effectiveInstrumentId)
   }
   const visitYearRange = visitDateRangeForYear(req.query?.year)
+  const { limit, skip, paginated } = parsePagination(req.query, { defaultLimit: 500, maxLimit: 500 })
   const match = {
     companyId: req.user.companyId,
     ...(await sharedInstrumentOperationalScope(req)),
   }
-  const clients = await Client.find(match)
-    .select('name phone updatedAt')
-    .sort({ updatedAt: -1 })
-    .limit(500)
-    .lean()
+  const baseQuery = Client.find(match).select('name phone updatedAt').sort({ updatedAt: -1 })
+  const [total, clients] = await Promise.all([
+    paginated ? Client.countDocuments(match) : Promise.resolve(null),
+    baseQuery.skip(skip).limit(limit).lean(),
+  ])
   const out = []
   for (const c of clients) {
     const sites = await Site.countDocuments({
@@ -123,6 +125,9 @@ export async function listClients(req) {
       pending: formatInr(pending),
       advance: formatInr(advance),
     })
+  }
+  if (paginated && total != null) {
+    return { clients: out, meta: { total, page: Math.floor(skip / limit) + 1, limit } }
   }
   return out
 }

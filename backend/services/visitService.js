@@ -12,6 +12,7 @@ import { visitDateRangeForYear } from '../utils/yearQuery.js'
 import { owedAmount } from '../utils/visitPaymentMath.js'
 import { recomputeVisitCreditsForSite } from './visitCreditAllocation.js'
 import * as uploadService from './uploadService.js'
+import { parsePagination } from '../utils/pagination.js'
 
 async function nextVisitCode(companyId) {
   const key = `visit:${companyId.toString()}`
@@ -223,19 +224,25 @@ export async function listVisits(req) {
     ...siteIdFilter,
     ...(visitYearRange ? { visitDate: visitYearRange } : {}),
   }
-  const visits = await SiteVisit.find(match)
+  const { limit, skip, paginated } = parsePagination(req.query, { defaultLimit: 200, maxLimit: 200 })
+  const baseQuery = SiteVisit.find(match)
     .select(
       'visitCode visitNo visitDate machineLabel workDescription amount paymentStatus paidAmount paymentMode notes photoUrls billingLines billingOtherCharges clientId siteId siteAddress sitePhone engineerName contactPerson dwgRefBy dwgNo instrumentId',
     )
     .sort({ visitDate: -1 })
-    .limit(200)
     .populate('clientId', 'name')
     .populate('siteId', 'name')
     .populate('instrumentId', 'name category')
-    .lean()
+  const [total, visits] = await Promise.all([
+    paginated ? SiteVisit.countDocuments(match) : Promise.resolve(null),
+    baseQuery.skip(skip).limit(limit).lean(),
+  ])
   const rows = await Promise.all(
     visits.map(async (v) => serializeVisitRow(v, await resolveVisitNo(v))),
   )
+  if (paginated && total != null) {
+    return { visits: rows, meta: { total, page: Math.floor(skip / limit) + 1, limit } }
+  }
   return rows
 }
 

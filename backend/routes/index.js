@@ -105,7 +105,11 @@ router.get('/dashboard', catchAsync(async (req, res) => {
 
 router.get('/clients', catchAsync(async (req, res) => {
   const data = await clientService.listClients(req)
-  res.json({ ok: true, clients: data })
+  if (Array.isArray(data)) {
+    res.json({ ok: true, clients: data })
+  } else {
+    res.json({ ok: true, clients: data.clients, meta: data.meta })
+  }
 }))
 
 router.post('/clients', validateBody(createClientSchema), catchAsync(async (req, res) => {
@@ -152,7 +156,11 @@ router.patch('/sites/:id', validateBody(updateSiteSchema), catchAsync(async (req
 
 router.get('/sites', catchAsync(async (req, res) => {
   const data = await siteService.listAllSites(req)
-  res.json({ ok: true, sites: data })
+  if (Array.isArray(data)) {
+    res.json({ ok: true, sites: data })
+  } else {
+    res.json({ ok: true, sites: data.sites, meta: data.meta })
+  }
 }))
 
 router.delete('/sites/:id', catchAsync(async (req, res) => {
@@ -163,7 +171,11 @@ router.delete('/sites/:id', catchAsync(async (req, res) => {
 
 router.get('/visits', catchAsync(async (req, res) => {
   const data = await visitService.listVisits(req)
-  res.json({ ok: true, visits: data })
+  if (Array.isArray(data)) {
+    res.json({ ok: true, visits: data })
+  } else {
+    res.json({ ok: true, visits: data.visits, meta: data.meta })
+  }
 }))
 
 router.post('/visits', validateBody(createVisitSchema), catchAsync(async (req, res) => {
@@ -371,11 +383,13 @@ router.patch('/settings/me', catchAsync(async (req, res) => {
 }))
 
 router.get('/settings/invoice-bank-columns', catchAsync(async (req, res) => {
+  res.set('Cache-Control', 'private, max-age=300')
   const bankColumns = await settingsService.getInvoiceBankColumns(req)
   res.json({ ok: true, bankColumns })
 }))
 
 router.get('/settings/invoice-company-header', catchAsync(async (req, res) => {
+  res.set('Cache-Control', 'private, max-age=300')
   const companyHeader = await settingsService.getInvoiceCompanyHeader(req)
   res.json({ ok: true, companyHeader })
 }))

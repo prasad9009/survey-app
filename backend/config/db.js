@@ -3,7 +3,8 @@ import mongoose from 'mongoose'
 export async function connectMongo(uri) {
   mongoose.set('strictQuery', true)
   await mongoose.connect(uri, {
-    maxPoolSize: 10,
+    maxPoolSize: 5,
+    minPoolSize: 1,
     serverSelectionTimeoutMS: 15_000,
   })
   mongoose.connection.on('error', (err) => {

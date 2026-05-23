@@ -1,4 +1,3 @@
-import nodemailer from 'nodemailer'
 import { env } from '../config/env.js'
 
 const BREVO_API_URL = 'https://api.brevo.com/v3/smtp/email'
@@ -74,9 +73,10 @@ export function getBrevoConfigHint() {
   return null
 }
 
-function getTransporter() {
+async function getTransporter() {
   if (!isBrevoSmtpConfigured()) return null
   if (!transporter) {
+    const nodemailer = (await import('nodemailer')).default
     const port = env.brevoSmtpPort
     const useSsl = port === 465
     transporter = nodemailer.createTransport({
@@ -184,7 +184,7 @@ async function sendPasswordResetOtpEmailViaApi({ to, otp }) {
 }
 
 async function sendPasswordResetOtpEmailViaSmtp({ to, otp }) {
-  const transport = getTransporter()
+  const transport = await getTransporter()
   if (!transport) {
     throw new Error('Brevo SMTP is not configured')
   }

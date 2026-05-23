@@ -24,7 +24,9 @@ import { lazyExportInvoicePdf } from './utils/lazyPdf'
 import { todayInvoiceDate } from './utils/invoiceDate'
 import { layoutBrandLogo } from './brandLogo'
 import { AppSelect } from './components/AppSelect'
+import { HeaderAdminBadge } from './components/HeaderAdminBadge'
 import { HeaderYearSelect } from './components/HeaderYearSelect'
+import { useAuth } from './context/AuthContext'
 import { PageRefreshButton } from './components/PageRefreshButton'
 import { signOut } from './signOut'
 
@@ -52,8 +54,10 @@ function FieldLabel({ label }: { label: string }) {
 }
 
 export default function Invoice({ onNavigate }: InvoiceProps) {
+  const { user } = useAuth()
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const { pathname } = useLocation()
+  const headerAdminRoleLabel = user?.role === 'super_admin' ? 'Super Admin' : 'Admin'
   const [formValues, setFormValues] = useState({
     client: 'RN Construction',
     site: 'Kolhapur Cancer Centre, Kolhapur',
@@ -206,8 +210,10 @@ export default function Invoice({ onNavigate }: InvoiceProps) {
                 <div className="grid h-16 w-16 place-items-center rounded-2xl bg-white/10 text-white ring-1 ring-white/15">
                   <CircleUserRound size={32} strokeWidth={1.75} />
                 </div>
-                <div className="mt-3 text-base font-extrabold text-white">Er. Shubham Bhoi</div>
-                <div className="mt-1 text-xs font-semibold text-white/65">Admin</div>
+                <div className="mt-3 text-base font-extrabold text-white">
+                  {user?.fullName?.trim() ? `Er. ${user.fullName.trim()}` : 'User'}
+                </div>
+                <div className="mt-1 text-xs font-semibold text-white/65">{headerAdminRoleLabel}</div>
               </div>
               <div className="mt-4 space-y-2 border-t border-white/10 pt-4">
                 <a
@@ -321,17 +327,11 @@ export default function Invoice({ onNavigate }: InvoiceProps) {
               <div className="flex shrink-0 items-center gap-2 sm:gap-3">
                 <PageRefreshButton variant="onLight" />
                 <HeaderYearSelect variant="onLight" />
-                <div className="hidden items-center gap-3 rounded-xl bg-neutral-100 px-3 py-2 ring-1 ring-black/5 sm:flex md:hidden sm:px-4 sm:py-2.5">
-                  <div className="grid h-9 w-9 place-items-center rounded-xl bg-[#f39b03]/15 text-[#f39b03]">
-                    <CircleUserRound size={18} />
-                  </div>
-                  <div className="min-w-0 text-left">
-                    <div className="truncate text-xs font-extrabold text-neutral-900 sm:text-sm">
-                      Er. Shubham Bhoi
-                    </div>
-                    <div className="text-[11px] font-semibold text-neutral-600">Admin</div>
-                  </div>
-                </div>
+                <HeaderAdminBadge
+                  name={user?.fullName || ''}
+                  roleLabel={headerAdminRoleLabel}
+                  withErPrefix
+                />
               </div>
             </div>
           </header>

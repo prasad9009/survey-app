@@ -33,6 +33,7 @@ import {
 } from './dashboardCards'
 import { AccountManagerSidebarBlock } from './AccountManagerSidebarBlock'
 import { AddSiteForm } from './AddSiteForm'
+import { HeaderAdminBadge } from './components/HeaderAdminBadge'
 import { HeaderYearSelect } from './components/HeaderYearSelect'
 import { BackgroundRefreshIndicator } from './components/BackgroundRefreshIndicator'
 import { PageRefreshButton } from './components/PageRefreshButton'
@@ -988,17 +989,7 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
                 <BackgroundRefreshIndicator isFetching={isFetching} hasData={hasData} />
                 <PageRefreshButton variant="onLight" />
                 <HeaderYearSelect variant="onLight" />
-                <div className="hidden items-center gap-3 rounded-xl bg-neutral-100 px-3 py-2 ring-1 ring-black/5 sm:flex md:hidden sm:px-4 sm:py-2.5">
-                  <div className="grid h-9 w-9 place-items-center rounded-xl bg-[#f39b03]/15 text-[#f39b03]">
-                    <CircleUserRound size={18} />
-                  </div>
-                  <div className="min-w-0 text-left">
-                    <div className="truncate text-xs font-extrabold text-neutral-900 sm:text-sm">
-                      {user?.fullName ?? '—'}
-                    </div>
-                    <div className="text-[11px] font-semibold text-neutral-600">{userRoleLabel || '—'}</div>
-                  </div>
-                </div>
+                <HeaderAdminBadge name={user?.fullName ?? ''} roleLabel={userRoleLabel || 'Admin'} />
               </div>
             </div>
           </header>

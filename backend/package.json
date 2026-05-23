@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "dev": "node --watch server.js",
-    "start": "node server.js",
+    "start": "node --max-old-space-size=384 server.js",
     "seed": "node seed/seed.js",
     "seed-admin-bank": "node seed/seedAdminBankDetails.js",
     "seed-company-invoice": "node seed/seedCompanyInvoiceBranding.js",

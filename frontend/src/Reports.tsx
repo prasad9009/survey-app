@@ -25,7 +25,9 @@ import { LayoutFooter } from './LayoutFooter'
 import { CardShell, StatCard } from './dashboardCards'
 import { AppSelect } from './components/AppSelect'
 import { layoutBrandLogo } from './brandLogo'
+import { HeaderAdminBadge } from './components/HeaderAdminBadge'
 import { HeaderYearSelect } from './components/HeaderYearSelect'
+import { useAuth } from './context/AuthContext'
 import { BackgroundRefreshIndicator } from './components/BackgroundRefreshIndicator'
 import { PageRefreshButton } from './components/PageRefreshButton'
 import { useReports } from './hooks/queries'
@@ -70,9 +72,11 @@ function Field({
 }
 
 export default function Reports({ onNavigate }: ReportsProps) {
+  const { user } = useAuth()
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const { pathname } = useLocation()
   const { selectedYear } = useSelectedYear()
+  const headerAdminRoleLabel = user?.role === 'super_admin' ? 'Super Admin' : 'Admin'
 
   const [reportType, setReportType] = useState<string>('Site-wise')
   const [clientFilter, setClientFilter] = useState('')
@@ -286,8 +290,10 @@ export default function Reports({ onNavigate }: ReportsProps) {
                 <div className="grid h-16 w-16 place-items-center rounded-2xl bg-white/10 text-white ring-1 ring-white/15">
                   <CircleUserRound size={32} strokeWidth={1.75} />
                 </div>
-                <div className="mt-3 text-base font-extrabold text-white">Er. Shubham Bhoi</div>
-                <div className="mt-1 text-xs font-semibold text-white/65">Admin</div>
+                <div className="mt-3 text-base font-extrabold text-white">
+                  {user?.fullName?.trim() ? `Er. ${user.fullName.trim()}` : 'User'}
+                </div>
+                <div className="mt-1 text-xs font-semibold text-white/65">{headerAdminRoleLabel}</div>
               </div>
               <div className="mt-4 space-y-2 border-t border-white/10 pt-4">
                 <a
@@ -407,15 +413,11 @@ export default function Reports({ onNavigate }: ReportsProps) {
                 <BackgroundRefreshIndicator isFetching={reportsQuery.isFetching} hasData={hasReportsData} />
                 <PageRefreshButton variant="onLight" />
                 <HeaderYearSelect variant="onLight" />
-                <div className="hidden items-center gap-3 rounded-xl bg-neutral-100 px-3 py-2 ring-1 ring-black/5 sm:flex md:hidden sm:px-4 sm:py-2.5">
-                  <div className="grid h-9 w-9 place-items-center rounded-xl bg-[#f39b03]/15 text-[#f39b03]">
-                    <CircleUserRound size={18} />
-                  </div>
-                  <div className="min-w-0 text-left">
-                    <div className="truncate text-xs font-extrabold text-neutral-900 sm:text-sm">Er. Shubham Bhoi</div>
-                    <div className="text-[11px] font-semibold text-neutral-600">Admin</div>
-                  </div>
-                </div>
+                <HeaderAdminBadge
+                  name={user?.fullName || ''}
+                  roleLabel={headerAdminRoleLabel}
+                  withErPrefix
+                />
               </div>
             </div>
           </header>

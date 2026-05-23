@@ -9,8 +9,8 @@
     "dev": "vite",
     "icons": "node scripts/generate-pwa-icons.mjs",
     "pwa-assets": "node scripts/generate-pwa-icons.mjs && node scripts/generate-pwa-splash.mjs",
-    "prebuild": "node scripts/ensure-tailwind-native.cjs && node scripts/generate-pwa-icons.mjs && node scripts/generate-pwa-splash.mjs",
-    "build": "cross-env NODE_OPTIONS=--max-old-space-size=8192 vite build",
+    "prebuild": "node scripts/ensure-tailwind-native.cjs && node scripts/optimize-public-images.mjs && node scripts/generate-pwa-icons.mjs && node scripts/generate-pwa-splash.mjs",
+    "build": "cross-env NODE_OPTIONS=--max-old-space-size=4096 vite build",
     "preview": "vite preview"
   },
   "dependencies": {

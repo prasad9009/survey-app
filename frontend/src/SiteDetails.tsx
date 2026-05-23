@@ -51,7 +51,9 @@ import { formatBillingLinesForDisplay } from './utils/formatBillingLines'
 import { todayInvoiceDate } from './utils/invoiceDate'
 import { AppSelect } from './components/AppSelect'
 import { toast } from 'sonner'
+import { HeaderAdminBadge } from './components/HeaderAdminBadge'
 import { HeaderYearSelect } from './components/HeaderYearSelect'
+import { useInstrumentHeaderAdminName } from './hooks/useInstrumentHeaderAdminName'
 import { PageRefreshButton } from './components/PageRefreshButton'
 import { usePageRefresh } from './context/RefreshContext'
 import { signOut } from './signOut'
@@ -583,13 +585,8 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
     if (siteId) next.set('siteId', siteId)
     return `/site-details?${next.toString()}`
   }
-  const instrumentHeaderAdminName = useMemo(() => {
-    const primary = instrumentScopedAdmins(companyAdmins, activeInstrumentId).find((a) =>
-      (a.fullName || '').trim(),
-    )
-    const raw = primary?.fullName?.trim() || user?.fullName?.trim() || ''
-    return raw.replace(/^Er\.\s*/i, '').trim()
-  }, [companyAdmins, activeInstrumentId, user?.fullName])
+  const instrumentHeaderAdminName = useInstrumentHeaderAdminName()
+  const headerAdminRoleLabel = user?.role === 'super_admin' ? 'Super Admin' : 'Admin'
 
   const pageTitle = isVisitMode ? 'Site Visit Details' : 'Site Details'
   const backPath = isVisitMode ? '/site-visits' : '/clients-sites'
@@ -1047,15 +1044,23 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
                   <ArrowLeft size={18} />
                 </button>
               </div>
-              <div className="flex items-center justify-between gap-3 border-t border-white/10 px-4 py-3">
-                <h1 className="min-w-0 truncate text-left text-base font-extrabold leading-tight tracking-tight text-white">
-                  {pageTitle}
-                </h1>
-                <div className="flex shrink-0 items-center gap-2">
+              <div className="flex items-start justify-between gap-3 border-t border-white/10 px-4 py-3">
+                <div className="min-w-0 flex-1">
+                  <h1 className="truncate text-left text-base font-extrabold leading-tight tracking-tight text-white">
+                    {pageTitle}
+                  </h1>
+                  <HeaderAdminBadge
+                    variant="mobile"
+                    name={instrumentHeaderAdminName || user?.fullName || ''}
+                    roleLabel={headerAdminRoleLabel}
+                    withErPrefix
+                  />
+                </div>
+                <div className="flex shrink-0 items-center gap-2 pt-0.5">
                   <PageRefreshButton variant="onDark" />
                   <HeaderYearSelect variant="onDark" compact />
-                  <span className="inline-flex items-center rounded-xl border border-white/20 bg-neutral-900 px-2.5 py-2 text-[11px] font-semibold leading-tight text-white">
-                    {statusLabel}
+                  <span className="inline-flex max-w-[5.5rem] items-center rounded-xl border border-white/20 bg-neutral-900 px-2 py-2 text-[10px] font-semibold leading-tight text-white sm:max-w-none sm:px-2.5 sm:text-[11px]">
+                    <span className="truncate">{statusLabel}</span>
                   </span>
                 </div>
               </div>
@@ -1088,19 +1093,11 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
                 <PageRefreshButton variant="onLight" />
                 <HeaderYearSelect variant="onLight" />
 
-                <div className="hidden items-center gap-3 rounded-xl bg-neutral-100 px-3 py-2 ring-1 ring-black/5 sm:flex md:hidden sm:px-4 sm:py-2.5">
-                  <div className="grid h-9 w-9 place-items-center rounded-xl bg-[#f39b03]/15 text-[#f39b03]">
-                    <CircleUserRound size={18} />
-                  </div>
-                  <div className="min-w-0 text-left">
-                    <div className="truncate text-xs font-extrabold text-neutral-900 sm:text-sm">
-                      {instrumentHeaderAdminName || '—'}
-                    </div>
-                    <div className="text-[11px] font-semibold text-neutral-600">
-                      {user?.role === 'super_admin' ? 'Super Admin' : 'Admin'}
-                    </div>
-                  </div>
-                </div>
+                <HeaderAdminBadge
+                  name={instrumentHeaderAdminName || user?.fullName || ''}
+                  roleLabel={headerAdminRoleLabel}
+                  withErPrefix
+                />
               </div>
             </div>
           </header>

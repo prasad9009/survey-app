@@ -12,6 +12,7 @@ const LEGACY_RUNTIME_CACHES = [
   'pages-cache',
   'assets-cache',
   'images-cache',
+  'images-cache-v4-offline',
   'pages-cache-v3-splash',
   'assets-cache-v3-splash',
   'images-cache-v3-splash',

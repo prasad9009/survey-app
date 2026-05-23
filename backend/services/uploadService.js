@@ -1,6 +1,5 @@
 import mongoose from 'mongoose'
 import { Readable } from 'stream'
-import sharp from 'sharp'
 import { cloudinary } from '../config/cloudinary.js'
 import { assertCloudinaryConfigured } from '../config/env.js'
 import SurveyFile from '../models/SurveyFile.js'
@@ -10,6 +9,13 @@ const CLOUDINARY_DELETE_CHUNK = 100
 const SITE_VISIT_IMAGE_MAX_SIDE_PX = 2200
 const SITE_VISIT_JPEG_QUALITY = 78
 const SITE_VISIT_PNG_QUALITY = 82
+
+/** Lazy-load sharp so API startup stays lean when no uploads occur. */
+let sharpLoader = null
+async function getSharp() {
+  if (!sharpLoader) sharpLoader = import('sharp').then((m) => m.default)
+  return sharpLoader
+}
 
 /** Parse Cloudinary delivery URL → `public_id` (folder/name, no extension). */
 export function publicIdFromCloudinaryUrl(url) {
@@ -193,6 +199,7 @@ export async function optimizeSiteVisitImage({ buffer, mimeType }) {
   if (!mimeType?.startsWith('image/')) return { buffer, mimeType }
 
   try {
+    const sharp = await getSharp()
     let pipeline = sharp(buffer, { failOn: 'none' }).rotate().resize({
       width: SITE_VISIT_IMAGE_MAX_SIDE_PX,
       height: SITE_VISIT_IMAGE_MAX_SIDE_PX,

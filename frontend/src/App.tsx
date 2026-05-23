@@ -9,11 +9,12 @@ import {
   type NavigateFunction,
 } from 'react-router-dom'
 import InstallPrompt from './components/InstallPrompt.jsx'
-import Login from './Login.jsx'
-import ForgotPassword from './ForgotPassword.jsx'
-import VerifyOtp from './VerifyOtp.jsx'
-import ResetPassword from './ResetPassword.jsx'
 import { useAuth } from './context/AuthContext'
+
+const Login = lazy(() => import('./Login.jsx'))
+const ForgotPassword = lazy(() => import('./ForgotPassword.jsx'))
+const VerifyOtp = lazy(() => import('./VerifyOtp.jsx'))
+const ResetPassword = lazy(() => import('./ResetPassword.jsx'))
 
 const Dashboard = lazy(() => import('./Dashboard'))
 const Invoice = lazy(() => import('./Invoice'))

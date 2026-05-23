@@ -22,6 +22,7 @@ import { LayoutFooter } from './LayoutFooter'
 import { CardPanel, toolbarSearchInputClass, toolbarSecondaryButtonClass } from './dashboardCards'
 import { layoutBrandLogo } from './brandLogo'
 import { AppSelect } from './components/AppSelect'
+import { HeaderAdminBadge } from './components/HeaderAdminBadge'
 import { HeaderYearSelect } from './components/HeaderYearSelect'
 import { PageRefreshButton } from './components/PageRefreshButton'
 import { useRefresh } from './context/RefreshContext'
@@ -36,7 +37,7 @@ type AddSiteProps = {
 }
 
 export default function AddSite({ onNavigate }: AddSiteProps) {
-  const { token, activeInstrumentId } = useAuth()
+  const { token, activeInstrumentId, user } = useAuth()
   const { selectedYear } = useSelectedYear()
   const { refreshTick } = useRefresh()
   const location = useLocation()
@@ -212,13 +213,11 @@ export default function AddSite({ onNavigate }: AddSiteProps) {
               <div className="flex shrink-0 items-center gap-2 sm:gap-3">
                 <PageRefreshButton variant="onLight" />
                 <HeaderYearSelect variant="onLight" />
-                <div className="hidden items-center gap-3 rounded-xl bg-neutral-100 px-4 py-2.5 ring-1 ring-black/5 sm:flex md:hidden">
-                  <div className="grid h-9 w-9 place-items-center rounded-xl bg-[#f39b03]/15 text-[#f39b03]"><CircleUserRound size={18} /></div>
-                  <div className="min-w-0 text-left">
-                    <div className="truncate text-sm font-extrabold text-neutral-900">Er. Shubham Bhoi</div>
-                    <div className="text-[11px] font-semibold text-neutral-600">Admin</div>
-                  </div>
-                </div>
+                <HeaderAdminBadge
+                  name={user?.fullName || ''}
+                  roleLabel={user?.role === 'super_admin' ? 'Super Admin' : 'Admin'}
+                  withErPrefix
+                />
               </div>
             </div>
           </header>

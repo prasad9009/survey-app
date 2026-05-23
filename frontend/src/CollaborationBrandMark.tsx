@@ -49,6 +49,7 @@ export function CollaborationBrandMark({ variant }: CollaborationBrandMarkProps)
           <img
             src={layoutBrandLogo}
             alt=""
+            decoding="async"
             draggable={false}
             className="mx-auto h-[4.5rem] w-auto max-w-[92%] object-contain object-center sm:h-[5rem]"
           />
@@ -63,6 +64,8 @@ export function CollaborationBrandMark({ variant }: CollaborationBrandMarkProps)
               <img
                 src={machineLogoSrc}
                 alt=""
+                loading="lazy"
+                decoding="async"
                 draggable={false}
                 className="h-6 w-auto max-h-6 max-w-[85%] object-contain object-center sm:h-7 sm:max-h-7"
               />
@@ -95,6 +98,8 @@ export function CollaborationBrandMark({ variant }: CollaborationBrandMarkProps)
       <img
         src={machineLogoSrc}
         alt=""
+        loading="lazy"
+        decoding="async"
         draggable={false}
         className="h-5 max-h-[28px] w-auto max-w-[38%] shrink object-contain object-center sm:h-6 sm:max-h-[30px]"
       />
