@@ -12,8 +12,6 @@ initPwaInstallCapture()
 initPwaZoomLock()
 initIosKeyboardViewport()
 import App from './App.tsx'
-import { AuthReadyGate } from './components/AuthReadyGate'
-import ServerWakeUp from './components/ServerWakeUp'
 import { AuthProvider } from './context/AuthContext'
 import { RefreshProvider } from './context/RefreshContext'
 import { SelectedYearProvider } from './context/SelectedYearContext'
@@ -26,18 +24,14 @@ function AppBootstrap() {
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <BrowserRouter>
-      <ServerWakeUp>
-        <AuthProvider>
-          <AuthReadyGate>
-            <SelectedYearProvider>
-              <RefreshProvider>
-                <AppBootstrap />
-                <Toaster richColors position="top-center" />
-              </RefreshProvider>
-            </SelectedYearProvider>
-          </AuthReadyGate>
-        </AuthProvider>
-      </ServerWakeUp>
+      <AuthProvider>
+        <SelectedYearProvider>
+          <RefreshProvider>
+            <AppBootstrap />
+            <Toaster richColors position="top-center" />
+          </RefreshProvider>
+        </SelectedYearProvider>
+      </AuthProvider>
     </BrowserRouter>
   </StrictMode>,
 )

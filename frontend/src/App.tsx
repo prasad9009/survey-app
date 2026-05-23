@@ -10,7 +10,6 @@ import {
 } from 'react-router-dom'
 import { DEFAULT_ACCOUNT_MANAGER_ID } from './accountManagersData'
 import InstallPrompt from './components/InstallPrompt.jsx'
-import { RouteFallback } from './components/RouteFallback'
 import Login from './Login.jsx'
 import ForgotPassword from './ForgotPassword.jsx'
 import VerifyOtp from './VerifyOtp.jsx'
@@ -84,7 +83,7 @@ function AppRoutes() {
   const navigate = useNavigate()
 
   return (
-    <Suspense fallback={<RouteFallback />}>
+    <Suspense fallback={null}>
       <Routes location={location}>
         <Route element={<AuthBoundary />}>
           <Route path="/" element={<HomeRedirect />} />
