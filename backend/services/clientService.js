@@ -52,6 +52,20 @@ async function clientFinancials(clientId, visitDateRange, instrumentId) {
   return { revenue, received, pending }
 }
 
+/** Credit payments from the client beyond total visit revenue (unallocated advance). */
+async function clientAdvanceAmount(clientId, companyId, visitDateRange, instrumentId, revenue) {
+  const creditMatch = {
+    companyId,
+    clientId,
+    type: 'credit',
+    ...(instrumentId ? { instrumentId } : {}),
+    ...(visitDateRange ? { occurredOn: visitDateRange } : {}),
+  }
+  const credits = await Transaction.find(creditMatch).select('amount').lean()
+  const creditTotal = credits.reduce((sum, t) => sum + decAmount(t.amount), 0)
+  return Math.max(0, creditTotal - revenue)
+}
+
 async function siteFinancials(siteId, visitDateRange, instrumentId) {
   const q = {
     siteId,
@@ -92,6 +106,13 @@ export async function listClients(req) {
       ...(effectiveInstrumentId ? { instrumentId: effectiveInstrumentId } : {}),
     })
     const { revenue, received, pending } = await clientFinancials(c._id, visitYearRange, effectiveInstrumentId)
+    const advance = await clientAdvanceAmount(
+      c._id,
+      req.user.companyId,
+      visitYearRange,
+      effectiveInstrumentId,
+      revenue,
+    )
     out.push({
       id: c._id.toString(),
       name: c.name,
@@ -100,6 +121,7 @@ export async function listClients(req) {
       revenue: formatInr(revenue),
       received: formatInr(received),
       pending: formatInr(pending),
+      advance: formatInr(advance),
     })
   }
   return out
@@ -274,6 +296,7 @@ export async function getClientReportExport(req, clientId, yearRaw) {
 
   const { revenue, received, pending } = await clientFinancials(client._id, visitYearRange, instrumentId)
   const totalCredit = credits.reduce((sum, t) => sum + decAmount(t.amount), 0)
+  const advance = Math.max(0, totalCredit - revenue)
   const coworkerAdmin =
     client.adminId
       ? await User.findOne({ _id: client.adminId, companyId: req.user.companyId })
@@ -290,6 +313,7 @@ export async function getClientReportExport(req, clientId, yearRaw) {
       revenue: formatInr(revenue),
       received: formatInr(received),
       pending: formatInr(pending),
+      advance: formatInr(advance),
     },
     coworker: coworkerAdmin
       ? {
@@ -305,6 +329,7 @@ export async function getClientReportExport(req, clientId, yearRaw) {
       received,
       creditTotal: totalCredit,
       pending,
+      advance,
     },
   }
 }
@@ -317,6 +342,70 @@ export async function getClientById(req, id) {
   }).lean()
   if (!client) throw new ApiError(404, 'Client not found')
   return client
+}
+
+export async function updateClient(req, clientId, body) {
+  const existing = await getClientById(req, clientId)
+  const name = body.name.trim()
+  const dup = await Client.findOne({
+    companyId: req.user.companyId,
+    instrumentId: existing.instrumentId,
+    _id: { $ne: existing._id },
+    name: new RegExp(`^${escapeRegex(name)}$`, 'i'),
+  })
+  if (dup) throw new ApiError(409, 'A client with this name already exists')
+
+  const patch = {
+    name,
+    phone: body.phone?.trim() ?? '',
+    email: body.email?.trim()?.toLowerCase() || undefined,
+    address: body.address?.trim() || undefined,
+    notes: body.notes?.trim() || undefined,
+  }
+
+  let updated
+  try {
+    updated = await Client.findOneAndUpdate(
+      { _id: clientId, companyId: req.user.companyId },
+      patch,
+      { new: true, runValidators: true },
+    ).lean()
+  } catch (e) {
+    if (e?.name === 'ValidationError') {
+      const msg = Object.values(e.errors ?? {})
+        .map((x) => x.message)
+        .filter(Boolean)
+        .join('; ')
+      throw new ApiError(400, msg || 'Invalid client data')
+    }
+    if (e?.code === 11000) {
+      throw new ApiError(409, 'A client with this name already exists')
+    }
+    throw e
+  }
+  if (!updated) throw new ApiError(404, 'Client not found')
+
+  const { effectiveInstrumentId } = await resolveInstrumentScope(req)
+  const visitYearRange = visitDateRangeForYear(req.query?.year)
+  const sites = await Site.countDocuments({
+    clientId: updated._id,
+    companyId: req.user.companyId,
+    ...(effectiveInstrumentId ? { instrumentId: effectiveInstrumentId } : {}),
+  })
+  const { revenue, received, pending } = await clientFinancials(
+    updated._id,
+    visitYearRange,
+    effectiveInstrumentId,
+  )
+  return {
+    id: updated._id.toString(),
+    name: updated.name,
+    phone: updated.phone ?? '',
+    sites,
+    revenue: formatInr(revenue),
+    received: formatInr(received),
+    pending: formatInr(pending),
+  }
 }
 
 /**

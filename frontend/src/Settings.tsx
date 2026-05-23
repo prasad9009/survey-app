@@ -13,33 +13,23 @@ import {
   UsersRound,
   X,
 } from 'lucide-react'
-import {
-  Fragment,
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-  type ChangeEvent,
-  type ReactNode,
-} from 'react'
+import { Fragment, useCallback, useEffect, useState, type ReactNode } from 'react'
 import { useLocation } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import http from './api/http'
 import { useSettings } from './hooks/queries'
 import { invalidateAfterSettingsChange } from './lib/invalidate'
 import { AccountManagerSidebarBlock } from './AccountManagerSidebarBlock'
-import { layoutBrandLogo } from './brandLogo'
 import { CollaborationBrandMark } from './CollaborationBrandMark'
 import { LayoutFooter } from './LayoutFooter'
 import { CardShell } from './dashboardCards'
-import { AppSelect } from './components/AppSelect'
 import { HeaderYearSelect } from './components/HeaderYearSelect'
 import { PageRefreshButton } from './components/PageRefreshButton'
 import { BackgroundRefreshIndicator } from './components/BackgroundRefreshIndicator'
 import { useAuth } from './context/AuthContext'
 import { getApiErrorMessage } from './api/request'
 import { signOut } from './signOut'
-import { notify, validateImageUpload } from './utils/notify'
+import { notify } from './utils/notify'
 
 type NavItem = {
   label: string
@@ -48,76 +38,6 @@ type NavItem = {
 
 type SettingsProps = {
   onNavigate: (path: string) => void
-}
-
-function formatBytes(bytes: number): string {
-  if (!Number.isFinite(bytes) || bytes <= 0) return '0 B'
-  const units = ['B', 'KB', 'MB', 'GB', 'TB']
-  let u = 0
-  let n = bytes
-  while (n >= 1024 && u < units.length - 1) {
-    n /= 1024
-    u += 1
-  }
-  const rounded = u === 0 || n >= 10 ? Math.round(n) : Number(n.toFixed(1))
-  return `${rounded} ${units[u]}`
-}
-
-function formatBackupDate(iso: string | null | undefined): string {
-  if (!iso) return 'Never'
-  try {
-    return new Date(iso).toLocaleDateString(undefined, {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric',
-    })
-  } catch {
-    return '—'
-  }
-}
-
-function ToggleRow({
-  label,
-  checked,
-  onChange,
-  disabled,
-}: {
-  label: string
-  checked: boolean
-  onChange: (next: boolean) => void
-  disabled?: boolean
-}) {
-  return (
-    <label
-      className={[
-        'flex items-center justify-between gap-3 rounded-xl px-2 py-1.5',
-        disabled ? 'cursor-not-allowed opacity-55' : '',
-      ].join(' ')}
-    >
-      <span className="truncate text-sm font-semibold text-neutral-800">{label}</span>
-      <input
-        type="checkbox"
-        checked={checked}
-        disabled={disabled}
-        onChange={(e) => onChange(e.target.checked)}
-        className="peer sr-only"
-        aria-label={label}
-      />
-      <div
-        className={[
-          'relative h-6 w-11 shrink-0 rounded-full transition',
-          checked ? 'bg-[#f39b03]' : 'bg-neutral-200',
-        ].join(' ')}
-      >
-        <span
-          className={[
-            'absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform',
-            checked ? 'translate-x-5' : 'translate-x-0',
-          ].join(' ')}
-        />
-      </div>
-    </label>
-  )
 }
 
 function Field({
@@ -140,44 +60,19 @@ export default function Settings({ onNavigate }: SettingsProps) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const { pathname } = useLocation()
   const { user } = useAuth()
-  const { companyQuery, meQuery, isLoading: settingsQueryLoading, isFetching: settingsFetching, hasData: settingsHasData } =
+  const { meQuery, isLoading: settingsQueryLoading, isFetching: settingsFetching, hasData: settingsHasData } =
     useSettings()
+  const { refreshSession } = useAuth()
   const isSuperAdmin = user?.role === 'super_admin'
   const displayName = user?.fullName?.trim() || user?.email || 'User'
-  const companyLocked = !isSuperAdmin
 
   const [pageLoading, setPageLoading] = useState(true)
   const [saveBusy, setSaveBusy] = useState(false)
 
-  // Company
-  const [companyName, setCompanyName] = useState('')
-  const [ownerName, setOwnerName] = useState('')
-  const [contactNumber, setContactNumber] = useState('')
-  const [emailAddress, setEmailAddress] = useState('')
-  const [officeAddress, setOfficeAddress] = useState('')
-  const [gstNumber, setGstNumber] = useState('')
-
-  const [logoPreviewUrl, setLogoPreviewUrl] = useState(layoutBrandLogo)
-  const [remoteLogoUrl, setRemoteLogoUrl] = useState<string | null>(null)
-  const [logoObjectUrl, setLogoObjectUrl] = useState<string | null>(null)
-  const logoInputRef = useRef<HTMLInputElement | null>(null)
-
-  useEffect(() => {
-    return () => {
-      if (logoObjectUrl) URL.revokeObjectURL(logoObjectUrl)
-    }
-  }, [logoObjectUrl])
-
-  const triggerLogoPicker = () => logoInputRef.current?.click()
-
-  // App preferences (company + user)
-  const [currencyCode, setCurrencyCode] = useState('INR')
-  const [dateFormat, setDateFormat] = useState('DD/MM/YYYY')
-  const [uiTheme, setUiTheme] = useState<'light' | 'dark' | 'system'>('system')
-  const [languageCode, setLanguageCode] = useState('en')
-  const [defaultMachine, setDefaultMachine] = useState<'Total Station' | 'DGPS'>('Total Station')
-  const [notificationsEnabled, setNotificationsEnabled] = useState(true)
-  const [autoBackupEnabled, setAutoBackupEnabled] = useState(true)
+  // Admin profile
+  const [adminFullName, setAdminFullName] = useState('')
+  const [adminPhone, setAdminPhone] = useState('')
+  const [adminEmail, setAdminEmail] = useState('')
 
   // Security
   const [currentPassword, setCurrentPassword] = useState('')
@@ -185,86 +80,27 @@ export default function Settings({ onNavigate }: SettingsProps) {
   const [confirmPassword, setConfirmPassword] = useState('')
   const [passwordBusy, setPasswordBusy] = useState(false)
 
-  // Backup & storage (from API)
-  const [storageUsedBytes, setStorageUsedBytes] = useState(0)
-  const [storageQuotaBytes, setStorageQuotaBytes] = useState(25 * 1024 ** 3)
-  const [lastBackupAt, setLastBackupAt] = useState<string | null>(null)
-  const [storedFileCount, setStoredFileCount] = useState(0)
-
-  // PDF / invoice
-  const [signatureUrl, setSignatureUrl] = useState<string | null>(null)
-  const [stampUrl, setStampUrl] = useState<string | null>(null)
-  const signatureInputRef = useRef<HTMLInputElement | null>(null)
-  const stampInputRef = useRef<HTMLInputElement | null>(null)
-
-  const [invoiceTheme, setInvoiceTheme] = useState<'modern' | 'classic' | 'minimal'>('modern')
-  const [footerNote, setFooterNote] = useState('')
-
   const [bdAccountName, setBdAccountName] = useState('')
   const [bdAccountNumber, setBdAccountNumber] = useState('')
   const [bdIfsc, setBdIfsc] = useState('')
   const [bdBankName, setBdBankName] = useState('')
   const [bdBranch, setBdBranch] = useState('')
   const [bdUpiPhone, setBdUpiPhone] = useState('')
-  const [bdInvoiceSlot, setBdInvoiceSlot] = useState<string>('')
-  const [bankSigPreview, setBankSigPreview] = useState<string | null>(null)
-  const bankSigInputRef = useRef<HTMLInputElement | null>(null)
-
-  const storagePercent =
-    storageQuotaBytes > 0 ? Math.min(100, Math.round((storageUsedBytes / storageQuotaBytes) * 100)) : 0
 
   const applySettingsFromCache = useCallback(() => {
     try {
-      const c = companyQuery.data
-      if (c) {
-        setCompanyName(c.name ?? '')
-        setOwnerName(c.ownerName ?? '')
-        setContactNumber(c.contactPhone ?? '')
-        setEmailAddress(c.email ?? '')
-        setOfficeAddress(c.officeAddress ?? '')
-        setGstNumber(c.gstNumber ?? '')
-        setCurrencyCode(c.settings?.currency ?? 'INR')
-        setDateFormat(c.settings?.dateFormat ?? 'DD/MM/YYYY')
-        const mach = c.settings?.defaultInstrumentTypeLabel ?? ''
-        setDefaultMachine(mach.toLowerCase().includes('dgps') ? 'DGPS' : 'Total Station')
-        setNotificationsEnabled(c.settings?.notificationsEnabled ?? true)
-        setAutoBackupEnabled(c.settings?.autoBackupEnabled ?? true)
-
-        const th = (c.invoiceDefaults?.theme ?? 'modern').toLowerCase()
-        setInvoiceTheme(th === 'classic' ? 'classic' : th === 'minimal' ? 'minimal' : 'modern')
-        setFooterNote(c.invoiceDefaults?.footerNote ?? '')
-        setStampUrl(c.invoiceDefaults?.stampUrl ?? null)
-
-        const logo = c.branding?.logoUrl
-        setRemoteLogoUrl(logo ?? null)
-        setLogoPreviewUrl(logo || layoutBrandLogo)
-
-        if (c.storage) {
-          setStorageUsedBytes(c.storage.usedBytes ?? 0)
-          setStorageQuotaBytes(c.storage.quotaBytes ?? 25 * 1024 ** 3)
-          setLastBackupAt(c.storage.lastBackupAt ? String(c.storage.lastBackupAt) : null)
-          setStoredFileCount(c.storage.fileCount ?? 0)
-        }
-      }
-
       const me = meQuery.data
-      if (
-        me?.preferences?.theme === 'light' ||
-        me?.preferences?.theme === 'dark' ||
-        me?.preferences?.theme === 'system'
-      ) {
-        setUiTheme(me.preferences.theme)
-      }
-      if (me?.preferences?.language) setLanguageCode(me.preferences.language)
+      setAdminEmail(me?.email ?? user?.email ?? '')
+      setAdminFullName(me?.profile?.fullName?.trim() ?? user?.fullName?.trim() ?? '')
+      setAdminPhone(me?.profile?.phone?.trim() ?? user?.phone?.trim() ?? '')
       const bd = me?.bankDetails
       if (bd) {
-        setBdAccountName(bd.accountName ?? '')
-        setBdAccountNumber(bd.accountNumber ?? '')
-        setBdIfsc(bd.ifscCode ?? '')
-        setBdBankName(bd.bankName ?? '')
-        setBdBranch(bd.branch ?? '')
-        setBdUpiPhone(bd.upiPhone ?? '')
-        setBdInvoiceSlot(bd.invoiceSlot === 1 || bd.invoiceSlot === 2 ? String(bd.invoiceSlot) : '')
+        setBdAccountName(String(bd.accountName ?? ''))
+        setBdAccountNumber(String(bd.accountNumber ?? ''))
+        setBdIfsc(String(bd.ifscCode ?? ''))
+        setBdBankName(String(bd.bankName ?? ''))
+        setBdBranch(String(bd.branch ?? ''))
+        setBdUpiPhone(String(bd.upiPhone ?? ''))
       } else {
         setBdAccountName('')
         setBdAccountNumber('')
@@ -272,70 +108,26 @@ export default function Settings({ onNavigate }: SettingsProps) {
         setBdBankName('')
         setBdBranch('')
         setBdUpiPhone('')
-        setBdInvoiceSlot('')
       }
-      setBankSigPreview(me?.bankSignatureUrl ?? null)
     } catch (err) {
       notify.apiError(err, 'Could not load settings.')
     }
-  }, [companyQuery.data, meQuery.data])
+  }, [meQuery.data, user?.email, user?.fullName, user?.phone])
 
   useEffect(() => {
     if (settingsQueryLoading && !settingsHasData) {
       setPageLoading(true)
       return
     }
-    if (companyQuery.data || meQuery.data) {
+    if (meQuery.data) {
       applySettingsFromCache()
     }
     setPageLoading(false)
-  }, [applySettingsFromCache, settingsQueryLoading, settingsHasData, companyQuery.data, meQuery.data])
+  }, [applySettingsFromCache, settingsQueryLoading, settingsHasData, meQuery.data])
 
   const reloadSettings = useCallback(() => {
     invalidateAfterSettingsChange(queryClient)
   }, [queryClient])
-
-  const handleLogoChange = async (e: ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    if (!isSuperAdmin) {
-      notify.error('Only a super admin can change the company logo.')
-      e.target.value = ''
-      return
-    }
-
-    const imageError = validateImageUpload(file)
-    if (imageError) {
-      notify.error(imageError)
-      e.target.value = ''
-      return
-    }
-
-    if (logoObjectUrl) URL.revokeObjectURL(logoObjectUrl)
-    const nextUrl = URL.createObjectURL(file)
-    setLogoObjectUrl(nextUrl)
-    setLogoPreviewUrl(nextUrl)
-
-    const toastId = notify.loading('Uploading logo…')
-    try {
-      const fd = new FormData()
-      fd.append('file', file)
-      await http.post('/api/settings/company/logo', fd)
-      URL.revokeObjectURL(nextUrl)
-      setLogoObjectUrl(null)
-      reloadSettings()
-      notify.dismiss(toastId)
-      notify.success('Logo uploaded successfully.')
-    } catch (err) {
-      URL.revokeObjectURL(nextUrl)
-      setLogoObjectUrl(null)
-      notify.dismiss(toastId)
-      notify.apiError(err, 'Logo upload failed.')
-      setLogoPreviewUrl(remoteLogoUrl || layoutBrandLogo)
-    } finally {
-      e.target.value = ''
-    }
-  }
 
   const navItems: NavItem[] = [
     { label: 'Dashboard', icon: <LayoutGrid size={16} /> },
@@ -414,153 +206,6 @@ export default function Settings({ onNavigate }: SettingsProps) {
     }
   }
 
-  const handleSignaturePick = () => signatureInputRef.current?.click()
-  const handleStampPick = () => stampInputRef.current?.click()
-
-  const handleSignatureChange = async (e: ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0]
-    if (!f) return
-    if (!isSuperAdmin) {
-      notify.error('Only a super admin can upload invoice assets.')
-      e.target.value = ''
-      return
-    }
-    const imageError = validateImageUpload(f)
-    if (imageError) {
-      notify.error(imageError)
-      e.target.value = ''
-      return
-    }
-    const toastId = notify.loading('Uploading signature…')
-    try {
-      const fd = new FormData()
-      fd.append('file', f)
-      await http.post('/api/settings/company/invoice-signature', fd)
-      reloadSettings()
-      notify.dismiss(toastId)
-      notify.success('Signature uploaded.')
-    } catch (err) {
-      notify.dismiss(toastId)
-      notify.apiError(err, 'Signature upload failed.')
-    } finally {
-      e.target.value = ''
-    }
-  }
-
-  const handleBankSignaturePick = () => bankSigInputRef.current?.click()
-
-  const handleBankSignatureChange = async (e: ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0]
-    if (!f) return
-    const imageError = validateImageUpload(f)
-    if (imageError) {
-      notify.error(imageError)
-      e.target.value = ''
-      return
-    }
-    const toastId = notify.loading('Uploading bank signature…')
-    try {
-      const fd = new FormData()
-      fd.append('file', f)
-      await http.post('/api/settings/me/bank-signature', fd)
-      reloadSettings()
-      notify.dismiss(toastId)
-      notify.success('Bank signature uploaded.')
-    } catch (err) {
-      notify.dismiss(toastId)
-      notify.apiError(err, 'Bank signature upload failed.')
-    } finally {
-      e.target.value = ''
-    }
-  }
-
-  const handleStampChange = async (e: ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0]
-    if (!f) return
-    if (!isSuperAdmin) {
-      notify.error('Only a super admin can upload invoice assets.')
-      e.target.value = ''
-      return
-    }
-    const imageError = validateImageUpload(f)
-    if (imageError) {
-      notify.error(imageError)
-      e.target.value = ''
-      return
-    }
-    const toastId = notify.loading('Uploading stamp…')
-    try {
-      const fd = new FormData()
-      fd.append('file', f)
-      await http.post('/api/settings/company/invoice-stamp', fd)
-      reloadSettings()
-      notify.dismiss(toastId)
-      notify.success('Stamp uploaded.')
-    } catch (err) {
-      notify.dismiss(toastId)
-      notify.apiError(err, 'Stamp upload failed.')
-    } finally {
-      e.target.value = ''
-    }
-  }
-
-  const handlePreviewInvoice = () => {
-    const w = window.open('', '_blank')
-    if (!w) {
-      notify.error('Please allow pop-ups to preview the invoice.')
-      return
-    }
-    const themeLabel =
-      invoiceTheme === 'classic' ? 'Classic' : invoiceTheme === 'minimal' ? 'Minimal' : 'Modern'
-    const logoSrc = logoPreviewUrl
-    const esc = (s: string) =>
-      s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
-    const html = `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"/><title>Invoice preview</title>
-<style>
-  body{font-family:system-ui,-apple-system,sans-serif;margin:0;padding:24px;background:#f4f4f5;color:#111;}
-  .sheet{max-width:720px;margin:0 auto;background:#fff;border-radius:12px;box-shadow:0 8px 30px rgba(0,0,0,.08);overflow:hidden;}
-  .modern header{border-bottom:4px solid #f39b03;}
-  .classic header{border-bottom:2px solid #111;}
-  .minimal header{border-bottom:1px solid #e5e5e5;}
-  header{padding:20px 24px;display:flex;align-items:flex-start;justify-content:space-between;gap:16px;}
-  .brand{display:flex;align-items:center;gap:14px;}
-  .brand img{max-height:56px;max-width:160px;object-fit:contain;}
-  h1{font-size:18px;margin:0;}
-  .meta{font-size:12px;color:#52525b;margin-top:4px;}
-  .body{padding:24px;}
-  table{width:100%;border-collapse:collapse;font-size:13px;}
-  th{text-align:left;padding:10px 8px;border-bottom:1px solid #e4e4e7;color:#52525b;font-weight:600;}
-  td{padding:10px 8px;border-bottom:1px solid #f4f4f5;}
-  .footer{padding:16px 24px 28px;font-size:12px;color:#71717a;border-top:1px solid #f4f4f5;}
-  .sig{display:flex;gap:24px;flex-wrap:wrap;margin-top:20px;align-items:flex-end;}
-  .sig img{max-height:72px;max-width:160px;object-fit:contain;}
-</style></head><body>
-<div class="sheet ${invoiceTheme}">
-  <header>
-    <div class="brand">
-      ${logoSrc ? `<img src="${esc(logoSrc)}" alt="Logo"/>` : ''}
-      <div><h1>${esc(companyName || 'Company')}</h1>
-      <div class="meta">${esc(emailAddress || '')}${officeAddress ? ` · ${esc(officeAddress)}` : ''}</div></div>
-    </div>
-    <div style="text-align:right;font-size:12px;"><strong>INVOICE</strong><div class="meta">Theme: ${esc(themeLabel)}</div></div>
-  </header>
-  <div class="body">
-    <table>
-      <thead><tr><th>Description</th><th>Qty</th><th>Amount</th></tr></thead>
-      <tbody>
-        <tr><td>Sample survey line item</td><td>1</td><td>—</td></tr>
-      </tbody>
-    </table>
-    <div class="sig">
-      ${stampUrl ? `<div><div style="font-size:11px;color:#71717a;margin-bottom:4px;">Stamp</div><img src="${esc(stampUrl)}" alt="Stamp"/></div>` : ''}
-    </div>
-  </div>
-  <div class="footer">${esc(footerNote || '')}</div>
-</div></body></html>`
-    w.document.write(html)
-    w.document.close()
-  }
-
   const handleCancel = () => {
     applySettingsFromCache()
   }
@@ -570,9 +215,9 @@ export default function Settings({ onNavigate }: SettingsProps) {
     const toastId = notify.loading('Saving settings…')
     try {
       await http.patch('/api/settings/me', {
-        preferences: {
-          theme: uiTheme,
-          language: languageCode,
+        profile: {
+          fullName: adminFullName.trim(),
+          phone: adminPhone.trim(),
         },
         bankDetails: {
           accountName: bdAccountName.trim(),
@@ -581,64 +226,17 @@ export default function Settings({ onNavigate }: SettingsProps) {
           bankName: bdBankName.trim(),
           branch: bdBranch.trim(),
           upiPhone: bdUpiPhone.trim(),
-          invoiceSlot: bdInvoiceSlot === '1' || bdInvoiceSlot === '2' ? Number(bdInvoiceSlot) : null,
         },
       })
-      if (isSuperAdmin) {
-        await http.patch('/api/settings/company', {
-          name: companyName.trim(),
-          ownerName: ownerName.trim(),
-          contactPhone: contactNumber.trim(),
-          email: emailAddress.trim(),
-          officeAddress: officeAddress.trim(),
-          gstNumber: gstNumber.trim(),
-          settings: {
-            currency: currencyCode,
-            dateFormat,
-            defaultInstrumentTypeLabel: defaultMachine,
-            notificationsEnabled,
-            autoBackupEnabled,
-          },
-          invoiceDefaults: {
-            theme: invoiceTheme,
-            footerNote: footerNote.trim(),
-          },
-        })
-      }
       notify.dismiss(toastId)
       notify.success('Settings saved successfully.')
       reloadSettings()
+      await refreshSession()
     } catch (err) {
       notify.dismiss(toastId)
       notify.apiError(err, 'Could not save settings.')
     } finally {
       setSaveBusy(false)
-    }
-  }
-
-  const handleCreateBackup = async () => {
-    if (!isSuperAdmin) return
-    try {
-      await http.post('/api/settings/company/backup')
-      reloadSettings()
-      notify.success('Backup recorded.')
-    } catch (err) {
-      notify.apiError(err, 'Could not record backup.')
-    }
-  }
-
-  const handleDownloadBackup = async () => {
-    if (!isSuperAdmin) return
-    try {
-      const res = await http.get('/api/settings/company/backup-export', { responseType: 'blob' })
-      const url = URL.createObjectURL(res.data)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = 'survey-company-backup.json'
-      a.click()
-      URL.revokeObjectURL(url)
-    } catch (err) {
-      notify.apiError(err, 'Could not download backup.')
     }
   }
 
@@ -889,110 +487,40 @@ export default function Settings({ onNavigate }: SettingsProps) {
               ) : (
                 <>
               <div className="grid grid-cols-1 gap-3 md:gap-5 xl:grid-cols-2">
-                {/* Company Information */}
+                {/* Admin profile */}
                 <div className="xl:col-span-2">
-                  <CardShell title="Company Details">
-                    <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(280px,360px)] lg:items-start lg:gap-6">
-                      <div className="min-w-0">
-                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                          <Field label="Company Name">
-                            <input
-                              value={companyName}
-                              onChange={(e) => setCompanyName(e.target.value)}
-                              disabled={companyLocked}
-                              className="h-11 w-full rounded-xl border border-neutral-200 bg-white px-3 text-sm font-semibold text-neutral-900 outline-none transition focus:border-[#f39b03]/80 focus:ring-2 focus:ring-[#f39b03]/20 disabled:cursor-not-allowed disabled:bg-neutral-50 disabled:text-neutral-500"
-                            />
-                          </Field>
-                          <Field label="Owner Name">
-                            <input
-                              value={ownerName}
-                              onChange={(e) => setOwnerName(e.target.value)}
-                              disabled={companyLocked}
-                              className="h-11 w-full rounded-xl border border-neutral-200 bg-white px-3 text-sm font-semibold text-neutral-900 outline-none transition focus:border-[#f39b03]/80 focus:ring-2 focus:ring-[#f39b03]/20 disabled:cursor-not-allowed disabled:bg-neutral-50 disabled:text-neutral-500"
-                            />
-                          </Field>
-                          <Field label="Contact Number">
-                            <input
-                              value={contactNumber}
-                              onChange={(e) => setContactNumber(e.target.value)}
-                              placeholder="+91 ... "
-                              disabled={companyLocked}
-                              className="h-11 w-full rounded-xl border border-neutral-200 bg-white px-3 text-sm font-semibold text-neutral-900 outline-none transition placeholder:text-neutral-400 focus:border-[#f39b03]/80 focus:ring-2 focus:ring-[#f39b03]/20 disabled:cursor-not-allowed disabled:bg-neutral-50 disabled:text-neutral-500"
-                            />
-                          </Field>
-                          <Field label="Email Address">
-                            <input
-                              value={emailAddress}
-                              onChange={(e) => setEmailAddress(e.target.value)}
-                              placeholder="name@company.com"
-                              disabled={companyLocked}
-                              className="h-11 w-full rounded-xl border border-neutral-200 bg-white px-3 text-sm font-semibold text-neutral-900 outline-none transition placeholder:text-neutral-400 focus:border-[#f39b03]/80 focus:ring-2 focus:ring-[#f39b03]/20 disabled:cursor-not-allowed disabled:bg-neutral-50 disabled:text-neutral-500"
-                            />
-                          </Field>
-                          <Field label="Office Address">
-                            <textarea
-                              value={officeAddress}
-                              onChange={(e) => setOfficeAddress(e.target.value)}
-                              rows={3}
-                              placeholder="Office location and address details"
-                              disabled={companyLocked}
-                              className="w-full resize-y rounded-xl border border-neutral-200 bg-white px-3 py-2.5 text-sm font-medium leading-relaxed text-neutral-900 outline-none transition placeholder:text-neutral-400 focus:border-[#f39b03]/80 focus:ring-2 focus:ring-[#f39b03]/20 disabled:cursor-not-allowed disabled:bg-neutral-50 disabled:text-neutral-500 sm:col-span-2"
-                            />
-                          </Field>
-                          <Field label="GST Number (optional)">
-                            <input
-                              value={gstNumber}
-                              onChange={(e) => setGstNumber(e.target.value)}
-                              placeholder="GSTIN"
-                              disabled={companyLocked}
-                              className="h-11 w-full rounded-xl border border-neutral-200 bg-white px-3 text-sm font-semibold text-neutral-900 outline-none transition placeholder:text-neutral-400 focus:border-[#f39b03]/80 focus:ring-2 focus:ring-[#f39b03]/20 disabled:cursor-not-allowed disabled:bg-neutral-50 disabled:text-neutral-500"
-                            />
-                          </Field>
-                        </div>
-                      </div>
-
-                      <div className="min-w-0 shrink-0 lg:max-w-none">
-                        <div className="rounded-xl border border-neutral-200 bg-white p-2.5 shadow-sm md:p-3">
-                        <div className="text-xs font-extrabold tracking-tight text-neutral-900">Logo Upload</div>
-                        <div className="mt-3 aspect-[4/3] overflow-hidden rounded-xl bg-neutral-50 ring-1 ring-black/5">
-                          <img
-                            src={logoPreviewUrl}
-                            alt="Company Logo Preview"
-                            className="h-full w-full object-contain p-3"
-                            draggable={false}
-                          />
-                        </div>
+                  <CardShell
+                    title="Admin details"
+                    leadingIcon={<CircleUserRound size={18} strokeWidth={2.25} />}
+                  >
+                    <p className="text-xs font-semibold leading-relaxed text-neutral-600">
+                      Your name and phone appear on PDF reports and invoices for instruments you work on. Email is
+                      managed by your account login and cannot be changed here.
+                    </p>
+                    <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                      <Field label="Full name">
                         <input
-                          ref={logoInputRef}
-                          type="file"
-                          accept="image/png,image/jpeg"
-                          className="sr-only"
-                          onChange={handleLogoChange}
+                          value={adminFullName}
+                          onChange={(e) => setAdminFullName(e.target.value)}
+                          placeholder="Er. Your name"
+                          className="h-11 w-full rounded-xl border border-neutral-200 bg-white px-3 text-sm font-semibold text-neutral-900 outline-none transition placeholder:text-neutral-400 focus:border-[#f39b03]/80 focus:ring-2 focus:ring-[#f39b03]/20"
                         />
-                        <button
-                          type="button"
-                          onClick={triggerLogoPicker}
-                          disabled={companyLocked}
-                          className="mt-3 inline-flex w-full items-center justify-center rounded-xl border border-neutral-200 bg-white px-4 py-2 text-sm font-extrabold text-neutral-800 shadow-sm ring-1 ring-black/5 transition hover:border-[#f39b03]/40 hover:text-[#f39b03] disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                          Change Logo
-                        </button>
-                        <p className="mt-3 text-[11px] font-medium leading-relaxed text-neutral-500">
-                          The bundled default logo (<span className="font-semibold text-neutral-700">src/assets/logo.jpeg</span>),
-                          including the artwork used for app icons and PWA install graphics, incorporates material sourced from{' '}
-                          <a
-                            href="https://www.flaticon.com/"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="font-semibold text-[#f39b03] underline-offset-2 hover:underline"
-                          >
-                            Flaticon
-                          </a>
-                          . Flaticon’s license requires attribution; cite the designer name from your icon download page if you
-                          substitute a different graphic.
-                        </p>
-                        </div>
-                      </div>
+                      </Field>
+                      <Field label="Phone">
+                        <input
+                          value={adminPhone}
+                          onChange={(e) => setAdminPhone(e.target.value)}
+                          placeholder="+91 …"
+                          className="h-11 w-full rounded-xl border border-neutral-200 bg-white px-3 text-sm font-semibold text-neutral-900 outline-none transition placeholder:text-neutral-400 focus:border-[#f39b03]/80 focus:ring-2 focus:ring-[#f39b03]/20"
+                        />
+                      </Field>
+                      <Field label="Email">
+                        <input
+                          value={adminEmail}
+                          readOnly
+                          className="h-11 w-full cursor-not-allowed rounded-xl border border-neutral-200 bg-neutral-50 px-3 text-sm font-semibold text-neutral-500 outline-none sm:col-span-2"
+                        />
+                      </Field>
                     </div>
                   </CardShell>
                 </div>
@@ -1064,10 +592,9 @@ export default function Settings({ onNavigate }: SettingsProps) {
                     leadingIcon={<Landmark size={18} strokeWidth={2.25} />}
                   >
                     <p className="text-xs font-semibold leading-relaxed text-neutral-600">
-                      These details appear in the dual-column bank block at the bottom of generated invoices. Choose{' '}
-                      <span className="font-extrabold text-neutral-800">Left column</span> or{' '}
-                      <span className="font-extrabold text-neutral-800">Right column</span> so each signatory maps to the
-                      correct side (two different users should use slot 1 and slot 2).
+                      Add or update your bank account here if it is not already on file. On invoices, your details are
+                      shown with your instrument coworker&apos;s (left column: you when you are on that instrument; right
+                      column: the other admin).
                     </p>
                     <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
                       <Field label="Account name">
@@ -1113,106 +640,9 @@ export default function Settings({ onNavigate }: SettingsProps) {
                           className="h-11 w-full rounded-xl border border-neutral-200 bg-white px-3 text-sm font-semibold text-neutral-900 outline-none transition focus:border-[#f39b03]/80 focus:ring-2 focus:ring-[#f39b03]/20"
                         />
                       </Field>
-                      <Field label="Position on invoice PDF">
-                        <AppSelect
-                          value={bdInvoiceSlot}
-                          onChange={setBdInvoiceSlot}
-                          className="h-11 w-full rounded-xl border border-neutral-200 bg-white px-3 text-sm font-semibold text-neutral-900 outline-none transition focus-within:border-[#f39b03]/80 focus-within:ring-2 focus-within:ring-[#f39b03]/20"
-                          options={[
-                            { value: '', label: 'Not shown as a column (omit from dual block)' },
-                            { value: '1', label: 'Left column' },
-                            { value: '2', label: 'Right column' },
-                          ]}
-                        />
-                      </Field>
                     </div>
                   </CardShell>
                 </div>
-
-                {/* Backup & Storage */}
-                <CardShell title="Backup & Storage">
-                  <div className="grid gap-4">
-                    <p className="text-xs font-semibold leading-relaxed text-neutral-600">
-                      Storage totals include all files registered for your company (including Cloudinary uploads such as visit
-                      photos and invoice assets). Quota is configured on the server.
-                    </p>
-                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                      <div className="rounded-xl border border-neutral-100 bg-white p-2.5 md:p-3">
-                        <div className="text-xs font-extrabold text-neutral-900">Storage used</div>
-                        <div className="mt-1 text-sm font-extrabold text-neutral-950">
-                          {formatBytes(storageUsedBytes)} / {formatBytes(storageQuotaBytes)}
-                        </div>
-                        <div className="mt-1 text-[11px] font-semibold text-neutral-500">
-                          {storedFileCount} file{storedFileCount === 1 ? '' : 's'} tracked
-                        </div>
-                      </div>
-                      <div className="rounded-xl border border-neutral-100 bg-white p-2.5 md:p-3">
-                        <div className="text-xs font-extrabold text-neutral-900">Backup status</div>
-                        <div className="mt-1 text-sm font-extrabold text-neutral-950">
-                          Last backup: {formatBackupDate(lastBackupAt)}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="rounded-xl border border-neutral-100 bg-white p-2.5 md:p-3">
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="text-xs font-extrabold text-neutral-900">Storage progress</div>
-                        <div className="text-xs font-extrabold text-[#f39b03]">{storagePercent}%</div>
-                      </div>
-                      <div className="mt-3 h-2.5 overflow-hidden rounded-full bg-neutral-100 ring-1 ring-black/5">
-                        <div
-                          className="h-full rounded-full bg-[#f39b03]"
-                          style={{ width: `${storagePercent}%` }}
-                        />
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                      <button
-                        type="button"
-                        onClick={() => void handleCreateBackup()}
-                        disabled={!isSuperAdmin}
-                        className="h-11 rounded-xl border border-neutral-200 bg-white px-4 text-sm font-extrabold text-neutral-900 shadow-sm ring-1 ring-black/5 transition hover:border-[#f39b03]/40 hover:text-[#f39b03] disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        Record backup
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => void handleDownloadBackup()}
-                        disabled={!isSuperAdmin}
-                        className="h-11 rounded-xl border border-neutral-200 bg-white px-4 text-sm font-extrabold text-neutral-900 shadow-sm ring-1 ring-black/5 transition hover:border-[#f39b03]/40 hover:text-[#f39b03] disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        Download backup (JSON)
-                      </button>
-                      <button
-                        type="button"
-                        disabled={!isSuperAdmin}
-                        className="h-11 rounded-xl border border-dashed border-neutral-200 bg-neutral-50 px-4 text-sm font-semibold text-neutral-600 sm:col-span-2"
-                      >
-                        Manage storage in Cloudinary Dashboard (super admin)
-                      </button>
-                    </div>
-                  </div>
-                </CardShell>
-
-                {/* PDF & Invoice Preferences */}
-                <CardShell title="PDF & invoice">
-                  <div className="grid gap-4">
-                    <p className="text-xs font-semibold text-neutral-600">
-                      Invoice PDFs use the company stamp asset bundled with the app (Authorised Signatory block).
-                    </p>
-                    <Field label="Footer note">
-                      <textarea
-                        value={footerNote}
-                        onChange={(e) => setFooterNote(e.target.value)}
-                        disabled={companyLocked}
-                        rows={4}
-                        placeholder="Shown at the bottom of PDF invoices"
-                        className="w-full resize-y rounded-xl border border-neutral-200 bg-white px-3 py-2.5 text-sm font-medium leading-relaxed text-neutral-900 outline-none transition placeholder:text-neutral-400 focus:border-[#f39b03]/80 focus:ring-2 focus:ring-[#f39b03]/20 disabled:cursor-not-allowed disabled:bg-neutral-50"
-                      />
-                    </Field>
-                  </div>
-                </CardShell>
               </div>
 
               <div className="mt-4 flex flex-col-reverse gap-2.5 max-md:mb-4 max-md:px-1 max-md:pb-4 sm:flex-row sm:items-center sm:justify-between md:mb-0 md:px-0 md:pb-0">

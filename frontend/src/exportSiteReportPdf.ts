@@ -10,6 +10,7 @@ import {
   PDF_TABLE_BASE_STYLES,
   PDF_TABLE_WIDTH,
 } from './utils/pdfTableStyles'
+import { drawWatermarkOnAllPages, loadPdfLogoDataUrl } from './utils/pdfWatermark'
 
 export type SiteReportVisitRow = {
   id: string
@@ -31,6 +32,11 @@ export type SiteReportPdfData = {
   year?: string
   filterNote?: string
   visits: SiteReportVisitRow[]
+  companyName?: string
+  adminName?: string
+  adminPhone?: string
+  coworkerName?: string
+  coworkerPhone?: string
 }
 
 function formatReportFilenameDate(d = new Date()) {
@@ -49,41 +55,6 @@ async function loadImageAsDataUrl(src: string) {
     reader.onerror = () => reject(new Error('Unable to load logo'))
     reader.readAsDataURL(blob)
   })
-}
-
-function drawWatermark(
-  doc: jsPDF,
-  logoDataUrl: string,
-  pageWidth: number,
-  pageHeight: number,
-  opacity = 0.055,
-) {
-  const size = 105
-  const x = (pageWidth - size) / 2
-  const y = (pageHeight - size) / 2 + 10
-  const anyDoc = doc as jsPDF & {
-    GState?: new (options: { opacity?: number }) => unknown
-    setGState?: (state: unknown) => void
-  }
-  if (anyDoc.GState && anyDoc.setGState) {
-    anyDoc.setGState(new anyDoc.GState({ opacity }))
-    doc.addImage(logoDataUrl, 'JPEG', x, y, size, size)
-    anyDoc.setGState(new anyDoc.GState({ opacity: 1 }))
-    return
-  }
-  doc.addImage(logoDataUrl, 'JPEG', x, y, size, size)
-}
-
-function drawWatermarkOnAllPages(doc: jsPDF, logoDataUrl: string) {
-  const totalPages = doc.getNumberOfPages()
-  const activePage = doc.getCurrentPageInfo().pageNumber
-  for (let page = 1; page <= totalPages; page += 1) {
-    doc.setPage(page)
-    const pageWidth = doc.internal.pageSize.getWidth()
-    const pageHeight = doc.internal.pageSize.getHeight()
-    drawWatermark(doc, logoDataUrl, pageWidth, pageHeight)
-  }
-  doc.setPage(activePage)
 }
 
 function pendingForRow(row: SiteReportVisitRow) {
@@ -106,27 +77,40 @@ export async function exportSiteReportPdf(data: SiteReportPdfData) {
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
   const pageWidth = doc.internal.pageSize.getWidth()
   const marginX = PDF_MARGIN
-  let startY = 16
-  let logoDataUrl: string | null = null
+  let startY = 36
 
   try {
-    logoDataUrl = await loadImageAsDataUrl(
+    const logoDataUrl = await loadImageAsDataUrl(
       typeof invoiceLogo === 'string' ? invoiceLogo : String(invoiceLogo),
     )
-    doc.addImage(logoDataUrl, 'JPEG', marginX, 10, 18, 18)
-    startY = 22
+    doc.addImage(logoDataUrl, 'JPEG', marginX, 8, 22, 22)
   } catch {
-    startY = 16
+    // Keep letterhead spacing even when logo is unavailable.
   }
 
+  const companyName = (data.companyName ?? 'Samarth Land Surveyors').trim() || 'Samarth Land Surveyors'
+  const adminLine = [data.adminName?.trim(), data.adminPhone?.trim()].filter(Boolean).join(' - ')
+  const coworkerLine = [data.coworkerName?.trim(), data.coworkerPhone?.trim()].filter(Boolean).join(' - ')
+  const contactRightX = pageWidth - marginX
+
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(15)
+  doc.setFontSize(16)
   doc.setTextColor(23, 23, 23)
-  doc.text('Samarth Land Surveyors', marginX + 22, 14)
+  doc.text(companyName, pageWidth / 2, 14, { align: 'center' })
+  doc.setFontSize(10)
+  doc.text('Site Report', pageWidth / 2, 20, { align: 'center' })
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(9)
   doc.setTextColor(82, 82, 82)
-  doc.text('Site Report', marginX + 22, 19)
+  doc.text('Site visits summary', pageWidth / 2, 25, { align: 'center' })
+
+  doc.setTextColor(45, 45, 45)
+  doc.setFontSize(8.5)
+  doc.setFont('helvetica', 'bold')
+  doc.text(adminLine || '—', contactRightX, 12, { align: 'right' })
+  doc.text(coworkerLine || '—', contactRightX, 17, { align: 'right' })
+  doc.setDrawColor(60, 60, 60)
+  doc.line(marginX, 30, pageWidth - marginX, 30)
 
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(14)
@@ -214,9 +198,14 @@ export async function exportSiteReportPdf(data: SiteReportPdfData) {
     },
   })
 
-  if (logoDataUrl) drawWatermarkOnAllPages(doc, logoDataUrl)
+  try {
+    const watermarkLogo = await loadPdfLogoDataUrl()
+    drawWatermarkOnAllPages(doc, watermarkLogo)
+  } catch {
+    // Skip watermark if logo cannot load.
+  }
 
   const safeSite = data.siteName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'site'
-  const filename = `Site_Report_${safeSite}_${formatReportFilenameDate()}.pdf`
+  const filename = `site-report-${safeSite}-${formatReportFilenameDate()}.pdf`
   await savePdf(doc, filename)
 }

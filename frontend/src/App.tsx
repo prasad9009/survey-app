@@ -8,7 +8,6 @@ import {
   useNavigate,
   type NavigateFunction,
 } from 'react-router-dom'
-import { DEFAULT_ACCOUNT_MANAGER_ID } from './accountManagersData'
 import InstallPrompt from './components/InstallPrompt.jsx'
 import Login from './Login.jsx'
 import ForgotPassword from './ForgotPassword.jsx'
@@ -55,9 +54,9 @@ function CatchAllRedirect() {
 /** Mobile: pick a manager. Desktop (md+): same URL redirects to default manager ledger. */
 function AccountManagerIndex({ onNavigate }: { onNavigate: NavigateFunction }) {
   const location = useLocation()
-  const { managers, user } = useAuth()
+  const { managers, user, isLoading } = useAuth()
   const ownSlug = managers.find((m) => m.adminId && user?.id && m.adminId === user.id)?.id
-  const defaultSlug = ownSlug ?? managers[0]?.id ?? DEFAULT_ACCOUNT_MANAGER_ID
+  const defaultSlug = ownSlug ?? managers[0]?.id
   const [mdUp, setMdUp] = useState(
     () => typeof window !== 'undefined' && window.matchMedia('(min-width: 768px)').matches,
   )
@@ -68,12 +67,21 @@ function AccountManagerIndex({ onNavigate }: { onNavigate: NavigateFunction }) {
     return () => mq.removeEventListener('change', apply)
   }, [])
   if (mdUp) {
-    return (
-      <Navigate
-        to={{ pathname: `/account-manager/${defaultSlug}`, search: location.search }}
-        replace
-      />
-    )
+    if (isLoading) {
+      return (
+        <div className="app-layout-root flex min-h-dvh items-center justify-center bg-neutral-100">
+          <p className="text-sm font-semibold text-neutral-600">Loading account manager…</p>
+        </div>
+      )
+    }
+    if (defaultSlug) {
+      return (
+        <Navigate
+          to={{ pathname: `/account-manager/${defaultSlug}`, search: location.search }}
+          replace
+        />
+      )
+    }
   }
   return <AccountManagerSelect onNavigate={onNavigate} />
 }

@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 import { Toaster } from 'sonner'
 import { initPwaInstallCapture } from './utils/pwaInstall'
+import { hidePwaSplash } from './utils/pwaSplash'
 import { initIosKeyboardViewport } from './utils/iosKeyboardViewport'
 import { initPwaZoomLock } from './utils/pwaZoomLock'
 import { usePwaUpdater } from './hooks/usePwaUpdater'
@@ -22,7 +23,8 @@ function AppBootstrap() {
   return <App />
 }
 
-createRoot(document.getElementById('root')!).render(
+const rootEl = document.getElementById('root')!
+createRoot(rootEl).render(
   <StrictMode>
     <BrowserRouter>
       <AuthProvider>
@@ -38,3 +40,9 @@ createRoot(document.getElementById('root')!).render(
     </BrowserRouter>
   </StrictMode>,
 )
+
+requestAnimationFrame(() => {
+  requestAnimationFrame(() => {
+    hidePwaSplash()
+  })
+})

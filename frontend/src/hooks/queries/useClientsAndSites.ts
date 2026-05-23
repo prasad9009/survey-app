@@ -11,6 +11,7 @@ export type ClientRowFromQuery = {
   revenue: string
   received: string
   pending: string
+  advance: string
 }
 
 export type SiteRowFromQuery = {
@@ -38,6 +39,7 @@ export function useClientsAndSites() {
       revenue: c.revenue,
       received: c.received,
       pending: c.pending,
+      advance: c.advance ?? '₹0',
     }))
   }, [clientsQuery.data])
 

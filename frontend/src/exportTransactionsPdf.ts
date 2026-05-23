@@ -9,6 +9,7 @@ import {
   PDF_TABLE_BASE_STYLES,
   PDF_TABLE_WIDTH,
 } from './utils/pdfTableStyles'
+import { drawWatermarkOnAllPages, loadPdfLogoDataUrl } from './utils/pdfWatermark'
 
 export type PdfTransaction = {
   type: 'debit' | 'credit'
@@ -131,7 +132,7 @@ export async function exportAccountManagerReportPdf(opts: ExportAccountManagerRe
   doc.setFontSize(8.5)
   doc.setFont('helvetica', 'bold')
   doc.text(adminLine || '—', contactRightX, 12, { align: 'right' })
-  doc.text(coworkerLine || accountManagerName.trim() || '—', contactRightX, 17, { align: 'right' })
+  doc.text(coworkerLine || '—', contactRightX, 17, { align: 'right' })
   doc.setDrawColor(60, 60, 60)
   doc.line(marginX, 30, pageWidth - marginX, 30)
 
@@ -182,6 +183,13 @@ export async function exportAccountManagerReportPdf(opts: ExportAccountManagerRe
     columnStyles: ACCOUNT_TX_TABLE_COLS,
     margin: { left: marginX, right: marginX },
   })
+
+  try {
+    const watermarkLogo = await loadPdfLogoDataUrl()
+    drawWatermarkOnAllPages(doc, watermarkLogo)
+  } catch {
+    // Skip watermark if logo cannot load.
+  }
 
   const filename = `Account_Manager_Report_${formatReportFilenameDate()}.pdf`
   await savePdf(doc, filename)

@@ -28,5 +28,6 @@ export const queryKeys = {
   settingsCompany: () => [SURVEY_CACHE_ROOT, 'settings', 'company'] as const,
   settingsMe: () => [SURVEY_CACHE_ROOT, 'settings', 'me'] as const,
   admins: () => [SURVEY_CACHE_ROOT, 'admins'] as const,
-  instrumentsCoworkers: () => [SURVEY_CACHE_ROOT, 'instruments', 'coworkers'] as const,
+  instrumentsCoworkers: (instrumentId: string | null | undefined) =>
+    [SURVEY_CACHE_ROOT, 'instruments', 'coworkers', instrumentId ?? ''] as const,
 }

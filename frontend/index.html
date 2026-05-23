@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" class="pwa-starting">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon.png" />
@@ -16,10 +16,115 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black" />
     <meta name="apple-mobile-web-app-title" content="SurveyOS" />
     <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+    <link rel="preload" href="/splash/logo-bg2.png" as="image" type="image/png" fetchpriority="high" />
+    <link
+      rel="apple-touch-startup-image"
+      href="/splash/iphone-se-640x1136.png"
+      media="(device-width: 320px) and (device-height: 568px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)"
+    />
+    <link
+      rel="apple-touch-startup-image"
+      href="/splash/iphone8-750x1334.png"
+      media="(device-width: 375px) and (device-height: 667px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)"
+    />
+    <link
+      rel="apple-touch-startup-image"
+      href="/splash/iphone8plus-1242x2208.png"
+      media="(device-width: 414px) and (device-height: 736px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)"
+    />
+    <link
+      rel="apple-touch-startup-image"
+      href="/splash/iphonex-1125x2436.png"
+      media="(device-width: 375px) and (device-height: 812px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)"
+    />
+    <link
+      rel="apple-touch-startup-image"
+      href="/splash/iphone12-1170x2532.png"
+      media="(device-width: 390px) and (device-height: 844px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)"
+    />
+    <link
+      rel="apple-touch-startup-image"
+      href="/splash/iphone12max-1284x2778.png"
+      media="(device-width: 428px) and (device-height: 926px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)"
+    />
+    <link
+      rel="apple-touch-startup-image"
+      href="/splash/iphone14pro-1179x2556.png"
+      media="(device-width: 393px) and (device-height: 852px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)"
+    />
+    <link
+      rel="apple-touch-startup-image"
+      href="/splash/iphone14promax-1290x2796.png"
+      media="(device-width: 430px) and (device-height: 932px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)"
+    />
+    <link
+      rel="apple-touch-startup-image"
+      href="/splash/iphone14promax-1290x2796.png"
+      media="(orientation: portrait)"
+    />
+    <style id="pwa-splash-critical">
+      html.pwa-starting,
+      html.pwa-starting body {
+        margin: 0;
+        background: #000 !important;
+      }
+      #pwa-splash {
+        position: fixed;
+        inset: 0;
+        z-index: 2147483647;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #000;
+        padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom)
+          env(safe-area-inset-left);
+      }
+      #pwa-splash img {
+        display: block;
+        width: min(92vw, 707px);
+        height: auto;
+        max-height: min(42dvh, 353px);
+        object-fit: contain;
+        object-position: center;
+      }
+      #root:empty {
+        visibility: hidden;
+      }
+    </style>
     <title>Samarth SurveyOS</title>
   </head>
-  <body style="margin:0;background:#0a0a0a">
+  <body style="margin: 0; background: #000">
+    <div id="pwa-splash" aria-hidden="true">
+      <img
+        src="/splash/logo-bg2.png"
+        alt=""
+        width="707"
+        height="353"
+        decoding="sync"
+        fetchpriority="high"
+      />
+    </div>
     <div id="root"></div>
+    <script>
+      ;(function () {
+        var splash = document.getElementById('pwa-splash')
+        var critical = document.getElementById('pwa-splash-critical')
+        var hideTimer
+        function hideSplash() {
+          if (!splash) return
+          splash.remove()
+          splash = null
+          if (critical) critical.remove()
+          document.documentElement.classList.remove('pwa-starting')
+        }
+        window.__hidePwaSplash = hideSplash
+        hideTimer = window.setTimeout(hideSplash, 8000)
+        window.__hidePwaSplash = function () {
+          window.clearTimeout(hideTimer)
+          hideSplash()
+        }
+      })()
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

@@ -42,13 +42,14 @@ import { layoutBrandLogo } from './brandLogo'
 import { HeaderYearSelect } from './components/HeaderYearSelect'
 import { BackgroundRefreshIndicator } from './components/BackgroundRefreshIndicator'
 import { PageRefreshButton } from './components/PageRefreshButton'
-import { useAccountManager } from './hooks/queries'
+import { useAccountManager, useInstrumentCoworkers } from './hooks/queries'
 import { invalidateAfterTransactionChange } from './lib/invalidate'
 import { toast } from 'sonner'
 import http from './api/http'
 import { signOut } from './signOut'
 import { useAuth } from './context/AuthContext'
 import { useSelectedYear } from './context/SelectedYearContext'
+import { resolveLedgerReportHeaderContacts } from './utils/pdfAdminContacts'
 
 type NavItem = {
   label: string
@@ -79,14 +80,6 @@ function formatDisplayDate(isoDate: string) {
   return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
-function slugToDisplayLabel(slug: string) {
-  return slug
-    .split('-')
-    .filter(Boolean)
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(' ')
-}
-
 const TX_PAGE_SIZE = 12
 
 type TransactionType = 'debit' | 'credit'
@@ -115,7 +108,8 @@ type LedgerSummary = {
 
 export default function AccountManager({ onNavigate }: AccountManagerProps) {
   const queryClient = useQueryClient()
-  const { user, company, managers, activeInstrumentId } = useAuth()
+  const { user, company, managers, activeInstrumentId, companyAdmins, isLoading: authLoading } = useAuth()
+  const { coworkers: instrumentCoworkers } = useInstrumentCoworkers()
   const [isExporting, setIsExporting] = useState(false)
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const { managerId: managerIdFromRoute } = useParams<{ managerId: string }>()
@@ -233,14 +227,15 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
 
   const manager = useMemo(() => {
     if (!managerIdFromRoute) return undefined
-    if (ledgerMeta) {
-      return {
-        id: ledgerMeta.slug,
-        name: ledgerMeta.fullName,
-        shortName: ledgerMeta.shortName || ledgerMeta.fullName,
-        phone: ledgerMeta.phone ?? '',
-      }
-    }
+    const fromMeta = ledgerMeta
+      ? {
+          id: ledgerMeta.slug,
+          name: ledgerMeta.fullName,
+          shortName: ledgerMeta.shortName || ledgerMeta.fullName,
+          phone: ledgerMeta.phone ?? '',
+        }
+      : null
+    if (fromMeta) return fromMeta
     if (managerFromSession) {
       return {
         id: managerFromSession.id,
@@ -249,14 +244,11 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
         phone: managerFromSession.phone ?? '',
       }
     }
-    const label = slugToDisplayLabel(managerIdFromRoute)
-    return {
-      id: managerIdFromRoute,
-      name: label,
-      shortName: label,
-      phone: '',
-    }
+    return undefined
   }, [ledgerMeta, managerFromSession, managerIdFromRoute])
+
+  const managerIdentityLoading =
+    !manager && (authLoading || (ledgerQueryLoading && !hasData && !managerFromSession))
 
   const canEditLedger = useMemo(
     () => user?.role === 'super_admin' || (!!user?.id && !!ledgerMeta?.adminId && ledgerMeta.adminId === user.id),
@@ -354,6 +346,14 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
 
   if (ledgerLoadState === 'error') {
     return <Navigate to={{ pathname: '/account-manager', search: location.search }} replace />
+  }
+
+  if (managerIdentityLoading) {
+    return (
+      <div className="app-layout-root flex min-h-dvh items-center justify-center bg-neutral-100">
+        <p className="text-sm font-semibold text-neutral-600">Loading account manager…</p>
+      </div>
+    )
   }
 
   if (!manager) {
@@ -794,13 +794,15 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
                     className={toolbarSearchInputClass}
                   />
                 </div>
-                <div className="flex flex-wrap items-center gap-2">
+                <div className="flex w-full flex-nowrap items-center gap-1.5 md:w-auto md:shrink-0">
                   {viewMode === 'pending' ? (
                     <AppSelect
                       value={pendingFilter}
                       onChange={(v) => setPendingFilter(v as 'all' | 'withPending' | 'cleared')}
                       disabled={isLedgerLoading}
-                      className={[toolbarSecondaryButtonClass, 'min-w-[9.5rem]'].join(' ')}
+                      className={[toolbarSecondaryButtonClass, 'min-w-0 flex-1 md:min-w-[9.5rem] md:flex-none'].join(
+                        ' ',
+                      )}
                       aria-label="Filter pending rows"
                       options={[
                         { value: 'all', label: 'All Clients' },
@@ -809,21 +811,21 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
                       ]}
                     />
                   ) : (
-                    <AppSelect
-                      value={transactionFilter}
-                      onChange={(v) => setTransactionFilter(v as 'all' | TransactionType)}
-                      disabled={isLedgerLoading}
-                      className={[toolbarSecondaryButtonClass, 'min-w-[8.5rem]'].join(' ')}
-                      aria-label="Filter transactions by type"
-                      options={[
-                        { value: 'all', label: 'All Types' },
-                        { value: 'debit', label: 'Debit' },
-                        { value: 'credit', label: 'Credit' },
-                      ]}
-                    />
-                  )}
-                  {viewMode !== 'pending' ? (
                     <>
+                      <AppSelect
+                        value={transactionFilter}
+                        onChange={(v) => setTransactionFilter(v as 'all' | TransactionType)}
+                        disabled={isLedgerLoading}
+                        className={[toolbarSecondaryButtonClass, 'min-w-0 flex-1 md:min-w-[7.5rem] md:flex-none'].join(
+                          ' ',
+                        )}
+                        aria-label="Filter transactions by type"
+                        options={[
+                          { value: 'all', label: 'All Types' },
+                          { value: 'debit', label: 'Debit' },
+                          { value: 'credit', label: 'Credit' },
+                        ]}
+                      />
                       <button
                         type="button"
                         disabled={isLedgerLoading || isExporting}
@@ -845,13 +847,24 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
                             const credit = exportRows
                               .filter((t) => t.type === 'credit')
                               .reduce((sum, t) => sum + t.amount, 0)
+                            const { admin, coworker } = resolveLedgerReportHeaderContacts({
+                              user,
+                              companyAdmins,
+                              activeInstrumentId,
+                              ledgerAdminId: ledgerMeta?.adminId,
+                              instrumentCoworkers: instrumentCoworkers.map((c) => ({
+                                adminId: c.adminId,
+                                fullName: c.fullName,
+                                phone: c.phone,
+                              })),
+                            })
                             await exportAccountManagerReportPdf({
                               accountManagerName: manager.name,
                               companyName: company?.name,
-                              adminName: user?.fullName?.trim() || company?.name || 'Admin',
-                              adminPhone: user?.phone?.trim() || '',
-                              coworkerName: managerFromSession?.name || manager.name,
-                              coworkerPhone: managerFromSession?.phone || manager.phone || '',
+                              adminName: admin.fullName || company?.name || 'Admin',
+                              adminPhone: admin.phone,
+                              coworkerName: coworker?.fullName,
+                              coworkerPhone: coworker?.phone,
                               year: selectedYear,
                               transactions: exportRows,
                               totalDebit: debit,
@@ -874,7 +887,7 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
                       {canEditLedgerActions ? (
                         <button
                           type="button"
-                          className={toolbarPrimaryButtonClass}
+                          className={[toolbarPrimaryButtonClass, 'shrink-0 px-2.5 md:px-4'].join(' ')}
                           onClick={() => {
                             setDraftTx({
                               id: '',
@@ -887,11 +900,12 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
                           }}
                         >
                           <Plus className={toolbarPlusIconClass} />
-                          Add Transaction
+                          <span className="hidden min-[380px]:inline">Add Transaction</span>
+                          <span className="min-[380px]:hidden">Add</span>
                         </button>
                       ) : null}
                     </>
-                  ) : null}
+                  )}
                 </div>
               </CardPanel>
             </section>
@@ -1228,7 +1242,7 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
             ) : null}
 
             <section className="mt-4 md:mt-6">
-              <CardShell title={ledgerCardTitle} className="overflow-hidden" bodyClassName="p-0">
+              <CardShell title={ledgerCardTitle} className="mb-4 overflow-hidden md:mb-0" bodyClassName="p-0">
                 <div className="md:hidden">
                   {isLedgerLoading ? (
                     <ul className="flex flex-col gap-1.5 px-3 pb-1.5 pt-1.5" aria-hidden>
@@ -1293,53 +1307,50 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
                       </p>
                     </div>
                   ) : (
-                    <ul className="flex flex-col gap-1.5 px-3 pb-1.5 pt-1.5">
+                    <ul className="flex flex-col gap-1.5 px-3 pb-4 pt-1.5">
                       {paginatedTableTransactions.map((tx) => (
                         <li key={tx.id}>
-                          <div className="flex items-center gap-2 rounded-xl border border-neutral-200 bg-white p-2 shadow-sm ring-1 ring-black/5 md:p-3">
-                            <div
-                              className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[#f39b03]/15 text-[10px] font-extrabold text-[#c97702] ring-1 ring-[#f39b03]/25"
-                              aria-hidden
+                          <div className="flex items-center gap-2 rounded-xl border border-neutral-200 bg-white p-2 shadow-sm ring-1 ring-black/5">
+                            <button
+                              type="button"
+                              onClick={() => setViewingTxId(tx.id)}
+                              className="flex min-w-0 flex-1 items-center gap-2 text-left transition hover:opacity-90"
+                              aria-label={`View ${tx.type === 'debit' ? 'debit' : 'credit'} transaction · ${formatINR(tx.amount)}`}
                             >
-                              {tx.type === 'debit' ? 'DR' : 'CR'}
-                            </div>
-                            <div className="min-w-0 flex-1">
-                              <div className="truncate text-xs font-bold text-neutral-900">
-                                {tx.type === 'debit' ? tx.reason : tx.client}
+                              <div
+                                className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[#f39b03]/15 text-[10px] font-extrabold text-[#c97702] ring-1 ring-[#f39b03]/25"
+                                aria-hidden
+                              >
+                                {tx.type === 'debit' ? 'DR' : 'CR'}
                               </div>
-                              <div className="mt-0.5 text-[10px] font-semibold text-neutral-500">
-                                {tx.type === 'credit' ? tx.site : tx.date}
+                              <div className="min-w-0 flex-1">
+                                <div className="truncate text-xs font-bold text-neutral-900">
+                                  {tx.type === 'debit' ? tx.reason : tx.client}
+                                </div>
+                                <div className="mt-0.5 text-[10px] font-semibold text-neutral-500">
+                                  {tx.type === 'credit' ? tx.site : tx.date}
+                                </div>
                               </div>
-                            </div>
-                            <div className="flex shrink-0 items-center gap-1.5">
                               <div
                                 className={[
-                                  'text-right text-xs font-extrabold leading-tight',
+                                  'shrink-0 text-right text-xs font-extrabold leading-tight',
                                   tx.type === 'debit' ? 'text-rose-600' : 'text-emerald-600',
                                 ].join(' ')}
                               >
                                 {formatINR(tx.amount)}
                               </div>
+                            </button>
+                            {canEditLedgerActions ? (
                               <button
                                 type="button"
-                                onClick={() => setViewingTxId(tx.id)}
-                                className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[#f39b03]/12 text-[#f39b03] transition hover:bg-[#f39b03]/20 md:h-8 md:w-8"
-                                aria-label="View transaction"
+                                onClick={() => setDeleteConfirmTxId(tx.id)}
+                                disabled={deletingTxId === tx.id}
+                                className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-rose-500/12 text-rose-600 transition hover:bg-rose-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+                                aria-label="Delete transaction"
                               >
-                                <Eye size={14} />
+                                <Trash2 size={14} />
                               </button>
-                              {canEditLedgerActions ? (
-                                <button
-                                  type="button"
-                                  onClick={() => setDeleteConfirmTxId(tx.id)}
-                                  disabled={deletingTxId === tx.id}
-                                  className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-rose-500/12 text-rose-600 transition hover:bg-rose-500/20 disabled:cursor-not-allowed disabled:opacity-50 md:h-8 md:w-8"
-                                  aria-label="Delete transaction"
-                                >
-                                  <Trash2 size={14} />
-                                </button>
-                              ) : null}
-                            </div>
+                            ) : null}
                           </div>
                         </li>
                       ))}

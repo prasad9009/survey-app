@@ -141,15 +141,31 @@ function normalizeBillingInput(body) {
   }
 }
 
+function instrumentMakeLabel(v) {
+  const inst = v.instrumentId && typeof v.instrumentId === 'object' ? v.instrumentId : null
+  const name = (inst?.name ?? '').trim()
+  if (name) return name
+  return (v.machineLabel ?? '').trim() || '—'
+}
+
+function visitInstrumentIdString(v) {
+  const inst = v.instrumentId
+  if (!inst) return ''
+  if (typeof inst === 'object' && inst._id) return inst._id.toString()
+  return String(inst)
+}
+
 function serializeVisitRow(v, visitNo) {
   return {
     id: v.visitCode || v._id.toString(),
     _id: v._id.toString(),
     visitMongoId: v._id.toString(),
     visitNo,
+    instrumentId: visitInstrumentIdString(v),
     client: v.clientId?.name ?? '',
     site: v.siteId?.name ?? '',
     date: new Date(v.visitDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }),
+    instMake: instrumentMakeLabel(v),
     machine: v.machineLabel ?? '—',
     work: v.workDescription ?? '',
     amount: decToDisplay(parseFloat((v.amount ?? 0).toString()) || 0),
@@ -209,12 +225,13 @@ export async function listVisits(req) {
   }
   const visits = await SiteVisit.find(match)
     .select(
-      'visitCode visitNo visitDate machineLabel workDescription amount paymentStatus paidAmount paymentMode notes photoUrls billingLines billingOtherCharges clientId siteId siteAddress sitePhone engineerName contactPerson dwgRefBy dwgNo',
+      'visitCode visitNo visitDate machineLabel workDescription amount paymentStatus paidAmount paymentMode notes photoUrls billingLines billingOtherCharges clientId siteId siteAddress sitePhone engineerName contactPerson dwgRefBy dwgNo instrumentId',
     )
     .sort({ visitDate: -1 })
     .limit(200)
     .populate('clientId', 'name')
     .populate('siteId', 'name')
+    .populate('instrumentId', 'name category')
     .lean()
   const rows = await Promise.all(
     visits.map(async (v) => serializeVisitRow(v, await resolveVisitNo(v))),
@@ -282,7 +299,7 @@ export async function createVisit(req, body, { preUploadedPhotos } = {}) {
     dwgRefBy: dwgRefBy || undefined,
     dwgNo: dwgNo || undefined,
     contactPerson: contactPerson || undefined,
-    workDescription: body.workDescription?.trim(),
+    workDescription: (body.workDescription?.trim() || billingParticularOut || '').slice(0, 500) || undefined,
     machineLabel: body.machineLabel?.trim(),
     billingLines: billingLinesToStore,
     billingParticular: billingParticularOut,
@@ -325,6 +342,7 @@ export async function createVisit(req, body, { preUploadedPhotos } = {}) {
   const populated = await SiteVisit.findById(visit._id)
     .populate('clientId', 'name')
     .populate('siteId', 'name')
+    .populate('instrumentId', 'name category')
     .lean()
   return serializeVisitRow(populated ?? visit, visit.visitNo ?? visitNo)
 }
@@ -338,6 +356,7 @@ export async function getVisitById(req, visitId) {
   })
     .populate('clientId', 'name')
     .populate('siteId', 'name')
+    .populate('instrumentId', 'name category')
     .lean()
   if (!visit) throw new ApiError(404, 'Visit not found')
   const visitNo = await resolveVisitNo(visit)

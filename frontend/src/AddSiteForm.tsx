@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 export const DEFAULT_CLIENT_OPTIONS_FOR_ADD_SITE = [
   'Amit Developers',
@@ -7,9 +7,17 @@ export const DEFAULT_CLIENT_OPTIONS_FOR_ADD_SITE = [
   'Gajanan Projects',
 ] as const
 
+export type EditSiteInitial = {
+  id: string
+  name: string
+  location: string
+}
+
 export type AddSiteFormProps = {
   clientName: string
   variant?: 'page' | 'modal'
+  mode?: 'create' | 'edit'
+  editingSite?: EditSiteInitial | null
   onCancel: () => void
   onSuccess: () => void
   /** When set, called before onSuccess; throw or reject to keep the form open. */
@@ -19,15 +27,29 @@ export type AddSiteFormProps = {
 export function AddSiteForm({
   clientName,
   variant = 'page',
+  mode = 'create',
+  editingSite = null,
   onCancel,
   onSuccess,
   saveSite,
 }: AddSiteFormProps) {
-  const [siteName, setSiteName] = useState('')
-  const [locationName, setLocationName] = useState('')
+  const isEdit = mode === 'edit'
+  const [siteName, setSiteName] = useState(editingSite?.name ?? '')
+  const [locationName, setLocationName] = useState(editingSite?.location ?? '')
   const [isSaving, setIsSaving] = useState(false)
 
+  useEffect(() => {
+    if (!isEdit || !editingSite) return
+    setSiteName(editingSite.name)
+    setLocationName(editingSite.location)
+  }, [isEdit, editingSite])
+
   const resetFields = () => {
+    if (isEdit && editingSite) {
+      setSiteName(editingSite.name)
+      setLocationName(editingSite.location)
+      return
+    }
     setSiteName('')
     setLocationName('')
   }
@@ -53,7 +75,7 @@ export function AddSiteForm({
           if (saveSite) {
             await saveSite(siteName.trim(), locationName.trim())
           }
-          resetFields()
+          if (!isEdit) resetFields()
           onSuccess()
         } finally {
           setIsSaving(false)
@@ -104,7 +126,7 @@ export function AddSiteForm({
           disabled={isSaving}
           className="inline-flex h-11 min-w-[120px] flex-1 items-center justify-center rounded-xl bg-[#f39b03] px-8 text-sm font-extrabold text-white transition hover:bg-[#e18e03] enabled:cursor-pointer disabled:opacity-60 sm:flex-none"
         >
-          {isSaving ? 'Saving…' : 'Save Site'}
+          {isSaving ? 'Saving…' : isEdit ? 'Save Changes' : 'Save Site'}
         </button>
       </div>
     </form>

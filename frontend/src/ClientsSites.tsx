@@ -10,7 +10,8 @@ import {
   Briefcase,
   ClipboardList,
   Building2,
-  Eye,
+  Pencil,
+  Wallet,
   Mail,
   MapPin,
   Phone,
@@ -35,7 +36,7 @@ import { AddSiteForm } from './AddSiteForm'
 import { HeaderYearSelect } from './components/HeaderYearSelect'
 import { BackgroundRefreshIndicator } from './components/BackgroundRefreshIndicator'
 import { PageRefreshButton } from './components/PageRefreshButton'
-import { useClientsAndSites } from './hooks/queries'
+import { useClientsAndSites, useInstrumentCoworkers } from './hooks/queries'
 import { invalidateAfterClientChange, invalidateAfterSiteChange } from './lib/invalidate'
 import { CollaborationBrandMark } from './CollaborationBrandMark'
 import { LayoutFooter } from './LayoutFooter'
@@ -50,6 +51,7 @@ import { AppSelect } from './components/AppSelect'
 import { TablePagination } from './components/TablePagination'
 import { lazyExportAllClientsPdf, lazyExportClientPdf } from './utils/lazyPdf'
 import { runExport } from './utils/runExport'
+import { resolveLedgerReportHeaderContacts } from './utils/pdfAdminContacts'
 
 const CLIENT_PAGE_SIZE = 10
 
@@ -97,6 +99,7 @@ type ClientRow = {
   revenue: string
   received: string
   pending: string
+  advance: string
 }
 
 type SiteRow = {
@@ -115,14 +118,21 @@ type ClientsSitesProps = {
 
 export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
   const queryClient = useQueryClient()
-  const { user, activeInstrumentId, company, companyAdmins, managers } = useAuth()
+  const { user, activeInstrumentId, company, companyAdmins } = useAuth()
+  const { coworkers: instrumentCoworkers } = useInstrumentCoworkers()
   const { selectedYear } = useSelectedYear()
   const { clients, clientSitesMap, isLoading, isFetching, isError, hasData } = useClientsAndSites()
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [selectedClientName, setSelectedClientName] = useState<string | null>(null)
   const [isAddClientModalOpen, setIsAddClientModalOpen] = useState(false)
+  const [editingClient, setEditingClient] = useState<ClientRow | null>(null)
+  const [editClientName, setEditClientName] = useState('')
+  const [editClientPhone, setEditClientPhone] = useState('')
+  const [editClientError, setEditClientError] = useState('')
+  const [editClientBusy, setEditClientBusy] = useState(false)
   const [isAddSiteModalOpen, setIsAddSiteModalOpen] = useState(false)
+  const [editingSite, setEditingSite] = useState<{ site: SiteRow; clientName: string } | null>(null)
   const [sitesSearchQuery, setSitesSearchQuery] = useState('')
   const [clientPendingFilter, setClientPendingFilter] = useState<'all' | 'withPending' | 'cleared'>('all')
   const [siteStatusFilter, setSiteStatusFilter] = useState<'all' | SiteRow['status']>('all')
@@ -272,19 +282,19 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
   }
 
   const clientsAggregate = useMemo(() => {
-    let totalSites = 0
     let totalRevenue = 0
     let totalPending = 0
+    let totalAdvance = 0
     for (const c of clients) {
-      totalSites += c.sites
       totalRevenue += parseCurrency(c.revenue)
       totalPending += parseCurrency(c.pending)
+      totalAdvance += parseCurrency(c.advance)
     }
     return {
       totalClients: clients.length,
-      totalSites,
       totalRevenue,
       totalPending,
+      totalAdvance,
     }
   }, [clients])
 
@@ -345,12 +355,97 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
     resetAddClientForm()
   }
 
+  const handleOpenEditClientModal = (row: ClientRow) => {
+    if (!row.id) {
+      toast.error('This client cannot be edited.')
+      return
+    }
+    setEditingClient(row)
+    setEditClientName(row.name)
+    setEditClientPhone(row.phone.replace(/\D/g, '').slice(0, 10))
+    setEditClientError('')
+  }
+
+  const handleCloseEditClientModal = () => {
+    if (editClientBusy) return
+    setEditingClient(null)
+    setEditClientName('')
+    setEditClientPhone('')
+    setEditClientError('')
+  }
+
+  const handleUpdateClient = async () => {
+    if (!editingClient?.id || editClientBusy) return
+    const name = editClientName.trim()
+    const phone = editClientPhone.trim()
+
+    if (!name) {
+      setEditClientError('Client name is required.')
+      return
+    }
+    if (!phone) {
+      setEditClientError('Phone number is required.')
+      return
+    }
+    if (!/^\d{10}$/.test(phone)) {
+      setEditClientError('Phone number must be 10 digits.')
+      return
+    }
+
+    const duplicate = clients.some(
+      (client) => client.name.toLowerCase() === name.toLowerCase() && client.id !== editingClient.id,
+    )
+    if (duplicate) {
+      setEditClientError('A client with this name already exists.')
+      return
+    }
+
+    setEditClientBusy(true)
+    try {
+      const res = await http.patch<{ ok: boolean; client: ClientRow; error?: string }>(
+        `/api/clients/${editingClient.id}`,
+        { name, phone },
+      )
+      if (!res.data?.ok) {
+        setEditClientError(res.data?.error ?? 'Could not update client.')
+        return
+      }
+      toast.success('Client updated')
+      const previousName = editingClient.name
+      invalidateAfterClientChange(queryClient, selectedYear, activeInstrumentId)
+      if (selectedClientName === previousName) {
+        setSelectedClientName(name)
+      }
+      handleCloseEditClientModal()
+    } catch (e) {
+      const msg =
+        axios.isAxiosError(e) && (e.response?.data as { error?: string })?.error
+          ? String((e.response?.data as { error?: string }).error)
+          : 'Could not update client.'
+      setEditClientError(msg)
+    } finally {
+      setEditClientBusy(false)
+    }
+  }
+
   const handleOpenAddSiteModal = () => {
     setIsAddSiteModalOpen(true)
   }
 
   const handleCloseAddSiteModal = () => {
     setIsAddSiteModalOpen(false)
+  }
+
+  const handleOpenEditSiteModal = (site: SiteRow, clientName: string) => {
+    if (!site.id) {
+      toast.error('Site is not synced yet. Refresh the page.')
+      return
+    }
+    setEditingSite({ site, clientName })
+  }
+
+  const handleCloseEditSiteModal = () => {
+    setEditingSite(null)
   }
 
   const handleCreateClient = async () => {
@@ -445,15 +540,25 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
           receivedBy: string
           notes?: string
         }>
-        totals?: { revenue: number; received: number; creditTotal: number; pending: number }
+        totals?: { revenue: number; received: number; creditTotal: number; pending: number; advance?: number }
       }>(`/api/clients/${selectedClient.id}/report`, { params: { year: selectedYear } })
       if (!res.data?.ok) {
         toast.error('Could not load client report data')
         return
       }
+      const clientAdminId = (res.data.client?.adminId ?? selectedClient?.adminId ?? '').trim()
+      const { admin, coworker } = resolveLedgerReportHeaderContacts({
+        user,
+        companyAdmins,
+        activeInstrumentId,
+        ledgerAdminId: clientAdminId || undefined,
+        instrumentCoworkers: instrumentCoworkers.map((c) => ({
+          adminId: c.adminId,
+          fullName: c.fullName,
+          phone: c.phone,
+        })),
+      })
       await runExport('client PDF', () =>
-        // Include only the logged-in admin and one coworker in the report header.
-        // Avoid sending the full admin list.
         lazyExportClientPdf({
           client: res.data.client ?? selectedClient,
           sites: res.data.sites ?? selectedSites,
@@ -461,50 +566,10 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
           credits: res.data.credits,
           totals: res.data.totals,
           companyName: company?.name,
-          companyEmail: company?.email,
-          adminContacts: (() => {
-            const normalize = (v: string | undefined) => (v ?? '').trim().toLowerCase()
-            const normalizePhone = (v: string | undefined) => (v ?? '').replace(/\D/g, '')
-            const loggedIn = {
-              fullName: user?.fullName?.trim() || '',
-              phone: user?.phone?.trim() || '',
-            }
-            const coworkerFromReport = {
-              fullName: res.data.coworker?.fullName?.trim() || '',
-              phone: res.data.coworker?.phone?.trim() || '',
-            }
-            const clientAdminId = (res.data.client?.adminId ?? selectedClient?.adminId ?? '').trim()
-            const managerCoworker = clientAdminId
-              ? managers.find((m) => (m.adminId ?? '').trim() === clientAdminId)
-              : null
-            const loggedInName = normalize(loggedIn.fullName)
-            const loggedInPhone = normalizePhone(loggedIn.phone)
-            const coworker =
-              ((coworkerFromReport.fullName || coworkerFromReport.phone)
-                ? coworkerFromReport
-                : managerCoworker
-                ? { fullName: managerCoworker.name, phone: managerCoworker.phone }
-                : companyAdmins.find((a) => {
-                    const name = normalize(a.fullName)
-                    const phone = normalizePhone(a.phone)
-                    if (!name && !phone) return false
-                    const sameByPhone = Boolean(loggedInPhone) && Boolean(phone) && loggedInPhone === phone
-                    const sameByName = Boolean(loggedInName) && Boolean(name) && loggedInName === name
-                    return !sameByPhone && !sameByName
-                  })) ?? null
-            if (coworker) {
-              const cName = normalize(coworker.fullName)
-              const cPhone = normalizePhone(coworker.phone)
-              const sameByPhone = Boolean(loggedInPhone) && Boolean(cPhone) && loggedInPhone === cPhone
-              const sameByName = Boolean(loggedInName) && Boolean(cName) && loggedInName === cName
-              if (sameByPhone || sameByName) {
-                return [loggedIn].filter((c): c is { fullName: string; phone: string } => Boolean(c.fullName || c.phone))
-              }
-            }
-            return [loggedIn, coworker].filter(
-              (c): c is { fullName: string; phone: string } => Boolean(c && (c.fullName || c.phone)),
-            )
-          })(),
+          adminName: admin.fullName,
+          adminPhone: admin.phone,
+          coworkerName: coworker?.fullName,
+          coworkerPhone: coworker?.phone,
         }),
       )
     } catch {
@@ -642,7 +707,26 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
   const handleExportAllClientsPdf = () => {
     if (exportBusy) return
     setExportBusy(true)
-    void runExport('clients PDF', () => lazyExportAllClientsPdf(filteredRows)).finally(() => setExportBusy(false))
+    const { admin, coworker } = resolveLedgerReportHeaderContacts({
+      user,
+      companyAdmins,
+      activeInstrumentId,
+      instrumentCoworkers: instrumentCoworkers.map((c) => ({
+        adminId: c.adminId,
+        fullName: c.fullName,
+        phone: c.phone,
+      })),
+    })
+    void runExport('clients PDF', () =>
+      lazyExportAllClientsPdf({
+        clients: filteredRows,
+        companyName: company?.name,
+        adminName: admin.fullName || company?.name || 'Admin',
+        adminPhone: admin.phone,
+        coworkerName: coworker?.fullName,
+        coworkerPhone: coworker?.phone,
+      }),
+    ).finally(() => setExportBusy(false))
   }
 
   const handleExportAllClientsExcel = () => {
@@ -966,13 +1050,15 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
                 type="button"
                 className="cursor-pointer bg-transparent p-0 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-[#f39b03]/70"
              
-                aria-label="Open Total Sites records"
+                aria-label="Open Total Advance records"
               >
                 <StatCard
-                  title="Total Sites"
-                  value={selectedClient ? String(selectedClient.sites) : String(clientsAggregate.totalSites)}
-                  subtitle={selectedClient ? 'Current Client' : 'All Sites'}
-                  icon={<MapPin size={20} className="text-violet-600" />}
+                  title="Total Advance"
+                  value={
+                    selectedClient ? selectedClient.advance : formatRupee(clientsAggregate.totalAdvance)
+                  }
+                  subtitle={selectedClient ? 'Extra paid by client' : 'All Clients'}
+                  icon={<Wallet size={20} className="text-violet-600" />}
                   toneClass="bg-violet-100"
                   mobileCardTint="bg-violet-50/90"
                 />
@@ -1024,7 +1110,7 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
                     className={toolbarSearchInputClass}
                   />
                 </div>
-                <div className="flex w-full flex-wrap items-center justify-between gap-2 md:w-auto md:justify-start">
+                <div className="flex w-full flex-nowrap items-center gap-1.5 md:w-auto md:flex-wrap md:justify-start md:gap-2">
                   <AppSelect
                     value={showAllSites ? siteStatusFilter : clientPendingFilter}
                     onChange={(v) => {
@@ -1034,7 +1120,7 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
                         setClientPendingFilter(v as 'all' | 'withPending' | 'cleared')
                       }
                     }}
-                    className={[toolbarSecondaryButtonClass, 'min-w-[9rem]'].join(' ')}
+                    className={[toolbarSecondaryButtonClass, 'min-w-0 flex-1 md:min-w-[9rem] md:flex-none'].join(' ')}
                     aria-label={showAllSites ? 'Filter sites' : 'Filter clients'}
                     options={
                       showAllSites
@@ -1085,11 +1171,11 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
                     className={toolbarSearchInputClass}
                   />
                 </div>
-                <div className="flex w-full flex-wrap items-center justify-between gap-2 md:w-auto md:justify-start">
+                <div className="flex w-full flex-nowrap items-center gap-1.5 md:w-auto md:flex-wrap md:justify-start md:gap-2">
                   <AppSelect
                     value={siteStatusFilter}
                     onChange={(v) => setSiteStatusFilter(v as 'all' | SiteRow['status'])}
-                    className={[toolbarSecondaryButtonClass, 'min-w-[9rem]'].join(' ')}
+                    className={[toolbarSecondaryButtonClass, 'min-w-0 flex-1 md:min-w-[9rem] md:flex-none'].join(' ')}
                     aria-label="Filter sites by status"
                     options={[
                       { value: 'all', label: 'All Statuses' },
@@ -1098,21 +1184,22 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
                       { value: 'Completed', label: 'Completed' },
                     ]}
                   />
-                  <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
-                    <button
-                      type="button"
-                      className={toolbarSecondaryButtonClass}
-                      disabled={exportBusy}
-                      onClick={handleExportClientPdf}
-                    >
-                      {exportBusy ? 'Exporting…' : 'Export'}
-                    </button>
-                    
-                    <button type="button" onClick={handleOpenAddSiteModal} className={toolbarPrimaryButtonClass}>
-                      <Plus className={toolbarPlusIconClass} />
-                      Add New Site
-                    </button>
-                  </div>
+                  <button
+                    type="button"
+                    className={toolbarSecondaryButtonClass}
+                    disabled={exportBusy}
+                    onClick={handleExportClientPdf}
+                  >
+                    {exportBusy ? '…' : 'Export'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleOpenAddSiteModal}
+                    className={[toolbarPrimaryButtonClass, 'max-w-[9.5rem] truncate px-2.5 md:max-w-none md:px-4'].join(' ')}
+                  >
+                    <Plus className={toolbarPlusIconClass} />
+                    <span className="truncate">Add Site</span>
+                  </button>
                 </div>
               </CardPanel>
             )}
@@ -1172,14 +1259,14 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
                             <div className="flex items-center gap-1.5">
                               <button
                                 type="button"
-                                className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-[#f39b03]/12 text-[#f39b03] transition hover:bg-[#f39b03]/20 md:h-8 md:w-8"
-                                aria-label={`View ${site.name}`}
+                                className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-neutral-200 bg-white text-neutral-900 transition hover:bg-neutral-50 md:h-8 md:w-8"
+                                aria-label={`Edit ${site.name}`}
                                 onClick={(event) => {
                                   event.stopPropagation()
-                                  onNavigate(getSiteDetailsPath(selectedClient.name, site))
+                                  handleOpenEditSiteModal(site, selectedClient.name)
                                 }}
                               >
-                                <Eye size={14} />
+                                <Pencil size={14} />
                               </button>
                               <button
                                 type="button"
@@ -1266,14 +1353,14 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
                             <div className="flex items-center justify-center gap-2">
                               <button
                                 type="button"
-                                className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-[#f39b03]/12 text-[#f39b03] transition hover:bg-[#f39b03]/20"
-                                aria-label={`View ${site.name}`}
+                                className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-neutral-200 bg-white text-neutral-900 transition hover:bg-neutral-50"
+                                aria-label={`Edit ${site.name}`}
                                 onClick={(event) => {
                                   event.stopPropagation()
-                                  onNavigate(getSiteDetailsPath(selectedClient.name, site))
+                                  handleOpenEditSiteModal(site, selectedClient.name)
                                 }}
                               >
-                                <Eye size={16} />
+                                <Pencil size={16} />
                               </button>
                               <button
                                 type="button"
@@ -1367,14 +1454,14 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
                             <div className="flex items-center gap-1.5">
                               <button
                                 type="button"
-                                className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-[#f39b03]/12 text-[#f39b03] transition hover:bg-[#f39b03]/20 md:h-8 md:w-8"
-                                aria-label={`View ${site.name}`}
+                                className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-neutral-200 bg-white text-neutral-900 transition hover:bg-neutral-50 md:h-8 md:w-8"
+                                aria-label={`Edit ${site.name}`}
                                 onClick={(event) => {
                                   event.stopPropagation()
-                                  onNavigate(getSiteDetailsPath(site.clientName, site))
+                                  handleOpenEditSiteModal(site, site.clientName)
                                 }}
                               >
-                                <Eye size={14} />
+                                <Pencil size={14} />
                               </button>
                               <button
                                 type="button"
@@ -1462,14 +1549,14 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
                             <div className="flex items-center justify-center gap-2">
                               <button
                                 type="button"
-                                className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-[#f39b03]/12 text-[#f39b03] transition hover:bg-[#f39b03]/20"
-                                aria-label={`View ${site.name}`}
+                                className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-neutral-200 bg-white text-neutral-900 transition hover:bg-neutral-50"
+                                aria-label={`Edit ${site.name}`}
                                 onClick={(event) => {
                                   event.stopPropagation()
-                                  onNavigate(getSiteDetailsPath(site.clientName, site))
+                                  handleOpenEditSiteModal(site, site.clientName)
                                 }}
                               >
-                                <Eye size={16} />
+                                <Pencil size={16} />
                               </button>
                               <button
                                 type="button"
@@ -1550,6 +1637,14 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
                           </button>
                           <button
                             type="button"
+                            className="inline-flex h-7 w-7 shrink-0 items-center justify-center self-center rounded-lg border border-neutral-200 bg-white text-neutral-900 transition hover:bg-neutral-50 md:h-8 md:w-8"
+                            aria-label={`Edit client ${row.name}`}
+                            onClick={() => handleOpenEditClientModal(row)}
+                          >
+                            <Pencil size={14} />
+                          </button>
+                          <button
+                            type="button"
                             className={`${actionTrashButtonClassMobile} shrink-0 self-center`}
                             aria-label={`Delete client ${row.name}`}
                             onClick={() => openDeleteClientDialog(row)}
@@ -1609,14 +1704,14 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
                             <div className="flex items-center justify-center gap-2">
                               <button
                                 type="button"
-                                className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-[#f39b03]/12 text-[#f39b03] transition hover:bg-[#f39b03]/20"
-                                aria-label={`View ${row.name}`}
+                                className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-neutral-200 bg-white text-neutral-900 transition hover:bg-neutral-50"
+                                aria-label={`Edit ${row.name}`}
                                 onClick={(e) => {
                                   e.stopPropagation()
-                                  setSelectedClientName(row.name)
+                                  handleOpenEditClientModal(row)
                                 }}
                               >
-                                <Eye size={16} />
+                                <Pencil size={16} />
                               </button>
                               <button
                                 type="button"
@@ -1738,6 +1833,86 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
         </div>
       ) : null}
 
+      {editingClient ? (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
+          <button
+            type="button"
+            className="absolute inset-0 bg-black/50"
+            aria-label="Close edit client modal"
+            onClick={handleCloseEditClientModal}
+          />
+          <div className="relative z-[71] w-full max-w-md rounded-2xl bg-white p-5 shadow-[0_20px_50px_rgba(0,0,0,0.35)] ring-1 ring-black/10 sm:p-6">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-extrabold tracking-tight text-neutral-950">Edit Client</h2>
+                <p className="mt-1 text-xs font-semibold text-neutral-600">Update client name and phone number.</p>
+              </div>
+              <button
+                type="button"
+                className="grid h-9 w-9 place-items-center rounded-xl bg-neutral-100 text-neutral-700 transition hover:bg-neutral-200"
+                onClick={handleCloseEditClientModal}
+                aria-label="Close"
+                disabled={editClientBusy}
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="mt-4 space-y-3">
+              <label className="block">
+                <span className="mb-1.5 block text-xs font-extrabold text-neutral-800">Client Name</span>
+                <input
+                  type="text"
+                  value={editClientName}
+                  onChange={(event) => {
+                    setEditClientName(event.target.value)
+                    if (editClientError) setEditClientError('')
+                  }}
+                  placeholder="Enter client name"
+                  className="h-11 w-full rounded-xl border border-neutral-200 bg-neutral-50 px-3 text-sm font-semibold text-neutral-900 outline-none transition focus:border-[#f39b03] focus:bg-white focus:ring-2 focus:ring-[#f39b03]/20"
+                />
+              </label>
+
+              <label className="block">
+                <span className="mb-1.5 block text-xs font-extrabold text-neutral-800">Phone Number</span>
+                <input
+                  type="tel"
+                  value={editClientPhone}
+                  onChange={(event) => {
+                    const sanitized = event.target.value.replace(/\D/g, '').slice(0, 10)
+                    setEditClientPhone(sanitized)
+                    if (editClientError) setEditClientError('')
+                  }}
+                  placeholder="10-digit mobile number"
+                  className="h-11 w-full rounded-xl border border-neutral-200 bg-neutral-50 px-3 text-sm font-semibold text-neutral-900 outline-none transition focus:border-[#f39b03] focus:bg-white focus:ring-2 focus:ring-[#f39b03]/20"
+                />
+              </label>
+
+              {editClientError ? <p className="text-xs font-semibold text-rose-600">{editClientError}</p> : null}
+            </div>
+
+            <div className="mt-5 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={handleCloseEditClientModal}
+                disabled={editClientBusy}
+                className="inline-flex h-10 items-center justify-center rounded-xl border border-neutral-200 bg-white px-4 text-xs font-extrabold text-neutral-800 transition hover:bg-neutral-50 disabled:opacity-60 md:text-sm"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleUpdateClient}
+                disabled={editClientBusy}
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-[#f39b03] px-4 text-xs font-extrabold text-white transition hover:bg-[#e18e03] disabled:opacity-60 md:text-sm"
+              >
+                {editClientBusy ? 'Saving…' : 'Save Changes'}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       <ConfirmAlert
         open={pendingDeleteClient !== null}
         title="Delete this client?"
@@ -1777,6 +1952,66 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
           void handleConfirmDeleteSite()
         }}
       />
+
+      {editingSite ? (
+        <div className="fixed inset-0 z-[72] flex items-center justify-center p-3 sm:p-4">
+          <button
+            type="button"
+            className="absolute inset-0 bg-black/50"
+            aria-label="Close edit site modal"
+            onClick={handleCloseEditSiteModal}
+          />
+          <div className="relative z-[73] flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white shadow-[0_20px_50px_rgba(0,0,0,0.35)] ring-1 ring-black/10">
+            <div className="flex shrink-0 items-start justify-between gap-3 border-b border-neutral-200 px-4 py-4 sm:px-5 sm:py-5">
+              <div className="min-w-0 pr-2">
+                <h2 className="text-lg font-extrabold tracking-tight text-neutral-950 sm:text-xl">Edit Site</h2>
+                <p className="mt-1 text-xs font-semibold text-neutral-600">
+                  Update site details for {editingSite.clientName}.
+                </p>
+              </div>
+              <button
+                type="button"
+                className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-neutral-100 text-neutral-700 transition hover:bg-neutral-200"
+                onClick={handleCloseEditSiteModal}
+                aria-label="Close"
+              >
+                <X size={16} />
+              </button>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-5 sm:py-5">
+              <AddSiteForm
+                clientName={editingSite.clientName}
+                variant="modal"
+                mode="edit"
+                editingSite={{
+                  id: editingSite.site.id!,
+                  name: editingSite.site.name,
+                  location: editingSite.site.location,
+                }}
+                onCancel={handleCloseEditSiteModal}
+                onSuccess={handleCloseEditSiteModal}
+                saveSite={async (siteName, locationName) => {
+                  const siteId = editingSite.site.id
+                  if (!siteId) {
+                    toast.error('Site is not synced yet. Refresh the page.')
+                    throw new Error('no site id')
+                  }
+                  const res = await http.patch<{ ok: boolean; error?: string }>(`/api/sites/${siteId}`, {
+                    name: siteName,
+                    locationLabel: locationName,
+                  })
+                  if (!res.data?.ok) {
+                    toast.error(res.data?.error ?? 'Could not update site')
+                    throw new Error('update site failed')
+                  }
+                  toast.success('Site updated')
+                  invalidateAfterSiteChange(queryClient, selectedYear, activeInstrumentId)
+                }}
+              />
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {isAddSiteModalOpen && selectedClient ? (
         <div className="fixed inset-0 z-[72] flex items-center justify-center p-3 sm:p-4">

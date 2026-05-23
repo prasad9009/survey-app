@@ -7,6 +7,9 @@ const VERSION_KEY = 'surveyos:build-version'
 const AUTO_UPDATE_AFTER_MS = 15000
 const REGISTRATION_REFRESH_MS = 60000
 
+/** Runtime caches from before logo-bg2 splash rollout. */
+const LEGACY_RUNTIME_CACHES = ['pages-cache', 'assets-cache', 'images-cache']
+
 const BUILD_VERSION = (
   import.meta.env.VITE_APP_VERSION || __APP_BUILD_VERSION__ || 'dev-build'
 ).trim()
@@ -22,6 +25,15 @@ export function usePwaUpdater() {
     const previousVersion = localStorage.getItem(VERSION_KEY)
     if (previousVersion && previousVersion !== BUILD_VERSION) {
       console.info(`[PWA] Installed build changed: ${previousVersion} -> ${BUILD_VERSION}`)
+      if ('caches' in window) {
+        void caches.keys().then((keys) => {
+          for (const key of keys) {
+            if (LEGACY_RUNTIME_CACHES.includes(key)) {
+              void caches.delete(key)
+            }
+          }
+        })
+      }
     }
     localStorage.setItem(VERSION_KEY, BUILD_VERSION)
 

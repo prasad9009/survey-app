@@ -14,18 +14,16 @@ import {
   X,
   ArrowRight,
 } from 'lucide-react'
-import { Fragment, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { Fragment, useMemo, useState, type ReactNode } from 'react'
 import { useLocation, useSearchParams, type NavigateFunction } from 'react-router-dom'
 import { AccountManagerSidebarBlock } from './AccountManagerSidebarBlock'
-import { ACCOUNT_MANAGERS } from './accountManagersData'
-import http from './api/http'
 import { useAuth } from './context/AuthContext'
+import { useInstrumentCoworkers } from './hooks/queries'
 import { CollaborationBrandMark } from './CollaborationBrandMark'
 import { LayoutFooter } from './LayoutFooter'
 import { CardPanel } from './dashboardCards'
 import { HeaderYearSelect } from './components/HeaderYearSelect'
 import { PageRefreshButton } from './components/PageRefreshButton'
-import { useRefresh } from './context/RefreshContext'
 import { signOut } from './signOut'
 
 type NavItem = {
@@ -56,50 +54,17 @@ type PickRow = {
   viewOnly?: boolean
 }
 
-type InstrumentPeerAm = {
-  adminId: string
-  accountManagerSlug: string | null
-  fullName: string
-  shortName: string
-  phone: string
-  email: string
-}
-
 export default function AccountManagerSelect({ onNavigate }: AccountManagerSelectProps) {
-  const { managers, token, activeInstrumentId, user, company } = useAuth()
+  const { managers, user, company, isLoading: authLoading } = useAuth()
+  const { coworkers, isLoading: coworkersLoading, isFetched: coworkersFetched } = useInstrumentCoworkers()
   const profileDisplayName = user?.fullName?.trim() || user?.email?.trim() || 'User'
   const sessionDisplayName = user?.fullName?.trim() ? `Er. ${user.fullName.trim()}` : profileDisplayName
   const sessionEmail = user?.email?.trim() || company?.email?.trim() || ''
   const sessionPhone = user?.phone?.trim() || ''
   const roleLabel = user?.role === 'super_admin' ? 'Super admin' : 'Admin'
-  const { refreshTick } = useRefresh()
-  const [instrumentAdmins, setInstrumentAdmins] = useState<InstrumentPeerAm[]>([])
-
-  useEffect(() => {
-    if (!token || !activeInstrumentId) {
-      setInstrumentAdmins([])
-      return
-    }
-    let cancelled = false
-    ;(async () => {
-      try {
-        const res = await http.get<{ ok: boolean; admins: InstrumentPeerAm[] }>('/api/instruments/coworkers', {
-          params: { instrumentId: activeInstrumentId },
-        })
-        if (cancelled) return
-        if (res.data?.ok) setInstrumentAdmins(res.data.admins ?? [])
-        else setInstrumentAdmins([])
-      } catch {
-        if (!cancelled) setInstrumentAdmins([])
-      }
-    })()
-    return () => {
-      cancelled = true
-    }
-  }, [token, activeInstrumentId, refreshTick])
 
   const pickList = useMemo((): PickRow[] => {
-    const fromInstrument = instrumentAdmins
+    const fromInstrument = coworkers
       .filter((a) => a.accountManagerSlug)
       .map((a) => ({
         id: a.accountManagerSlug as string,
@@ -109,10 +74,10 @@ export default function AccountManagerSelect({ onNavigate }: AccountManagerSelec
         viewOnly: Boolean(user?.id && a.adminId !== user.id),
       }))
     if (fromInstrument.length > 0) return fromInstrument
-    return managers.length
-      ? managers.map((m) => ({ id: m.id, name: m.name, shortName: m.shortName, phone: m.phone }))
-      : ACCOUNT_MANAGERS.map((m) => ({ id: m.id, name: m.name, shortName: m.shortName, phone: m.phone }))
-  }, [instrumentAdmins, managers, user?.id])
+    return managers.map((m) => ({ id: m.id, name: m.name, shortName: m.shortName, phone: m.phone }))
+  }, [coworkers, managers, user?.id])
+
+  const pickListReady = !authLoading && (!coworkersLoading || coworkersFetched)
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const location = useLocation()
   const [searchParams] = useSearchParams()
@@ -367,44 +332,62 @@ export default function AccountManagerSelect({ onNavigate }: AccountManagerSelec
               page.
             </p>
             <div className="mt-4 grid gap-3 sm:grid-cols-2 sm:gap-4">
-              {pickList.map((m) => (
-                <button
-                  key={m.id}
-                  type="button"
-                  onClick={() => pickManager(m.id)}
-                  className="group flex w-full flex-col gap-2.5 rounded-2xl border border-neutral-200 bg-white p-3 text-left shadow-sm ring-1 ring-black/5 transition hover:border-[#f39b03]/40 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-[#f39b03]/70 sm:gap-3 sm:p-5"
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <span className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-[#f39b03]/12 text-sm font-extrabold text-[#c97702] ring-1 ring-[#f39b03]/25">
-                      {m.shortName
-                        .split(/\s+/)
-                        .map((w) => w[0])
-                        .join('')
-                        .slice(0, 2)
-                        .toUpperCase()}
-                    </span>
-                    <ArrowRight
-                      size={20}
-                      className="shrink-0 text-neutral-400 transition group-hover:translate-x-0.5 group-hover:text-[#f39b03]"
+              {!pickListReady ? (
+                <>
+                  {[0, 1].map((i) => (
+                    <div
+                      key={i}
+                      className="h-36 animate-pulse rounded-2xl border border-neutral-200 bg-neutral-100 ring-1 ring-black/5"
                       aria-hidden
                     />
-                  </div>
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <div className="truncate text-base font-extrabold text-neutral-950 sm:text-lg">{m.name}</div>
-                      {m.viewOnly ? (
-                        <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wide text-amber-900 ring-1 ring-amber-200/90">
-                          View only
+                  ))}
+                </>
+              ) : null}
+              {pickListReady
+                ? pickList.map((m) => (
+                    <button
+                      key={m.id}
+                      type="button"
+                      onClick={() => pickManager(m.id)}
+                      className="group flex w-full flex-col gap-2.5 rounded-2xl border border-neutral-200 bg-white p-3 text-left shadow-sm ring-1 ring-black/5 transition hover:border-[#f39b03]/40 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-[#f39b03]/70 sm:gap-3 sm:p-5"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <span className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-[#f39b03]/12 text-sm font-extrabold text-[#c97702] ring-1 ring-[#f39b03]/25">
+                          {m.shortName
+                            .split(/\s+/)
+                            .map((w) => w[0])
+                            .join('')
+                            .slice(0, 2)
+                            .toUpperCase()}
                         </span>
-                      ) : null}
-                    </div>
-                    <div className="mt-1 truncate text-sm font-semibold text-neutral-600">{m.phone}</div>
-                  </div>
-                  <span className="text-xs font-bold text-[#f39b03]">
-                    {m.viewOnly ? 'Open ledger (view only) →' : 'Open account manager page →'}
-                  </span>
-                </button>
-              ))}
+                        <ArrowRight
+                          size={20}
+                          className="shrink-0 text-neutral-400 transition group-hover:translate-x-0.5 group-hover:text-[#f39b03]"
+                          aria-hidden
+                        />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <div className="truncate text-base font-extrabold text-neutral-950 sm:text-lg">{m.name}</div>
+                          {m.viewOnly ? (
+                            <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wide text-amber-900 ring-1 ring-amber-200/90">
+                              View only
+                            </span>
+                          ) : null}
+                        </div>
+                        <div className="mt-1 truncate text-sm font-semibold text-neutral-600">{m.phone}</div>
+                      </div>
+                      <span className="text-xs font-bold text-[#f39b03]">
+                        {m.viewOnly ? 'Open ledger (view only) →' : 'Open account manager page →'}
+                      </span>
+                    </button>
+                  ))
+                : null}
+              {pickListReady && pickList.length === 0 ? (
+                <p className="text-sm font-semibold text-neutral-600 sm:col-span-2">
+                  No account managers are available for this instrument yet.
+                </p>
+              ) : null}
             </div>
             {querySuffix ? (
               <CardPanel className="mt-6 p-4">

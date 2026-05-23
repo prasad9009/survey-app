@@ -6,6 +6,7 @@ import Client from '../models/Client.js'
 import Site from '../models/Site.js'
 import * as uploadService from './uploadService.js'
 import { ApiError } from '../utils/ApiError.js'
+import { instrumentCoworkerAdminIdStrings } from '../utils/instrumentPeers.js'
 
 const SIGNATURE_MAX_BYTES = 1024 * 1024
 
@@ -140,10 +141,6 @@ export async function updateUserSettings(req, body) {
     for (const k of ['accountName', 'accountNumber', 'ifscCode', 'bankName', 'branch', 'upiPhone']) {
       if (b[k] !== undefined) user.bankDetails[k] = typeof b[k] === 'string' ? b[k].trim() : b[k]
     }
-    if ('invoiceSlot' in b) {
-      if (b.invoiceSlot === 1 || b.invoiceSlot === 2) user.bankDetails.invoiceSlot = b.invoiceSlot
-      else user.bankDetails.invoiceSlot = undefined
-    }
     user.markModified('bankDetails')
   }
   await user.save()
@@ -163,31 +160,68 @@ export async function getInvoiceCompanyHeader(req) {
   }
 }
 
-/** Dual-column bank panel for PDF invoices (left/right slots on user records). */
+function readInvoiceInstrumentId(req) {
+  const h = req.headers['x-instrument-id']
+  if (h && String(h).trim()) return String(h).trim()
+  if (req.query?.instrumentId) return String(req.query.instrumentId)
+  return null
+}
+
+/** Current user first when on the instrument peer list; remaining peers sorted for stable order. */
+function orderPeerAdminIdsForInvoice(peerIds, currentUserId) {
+  const ids = [...peerIds].sort((a, b) => a.localeCompare(b))
+  const cur = currentUserId?.toString?.()
+  if (cur && ids.includes(cur)) return [cur, ...ids.filter((id) => id !== cur)]
+  return ids
+}
+
+async function bankColumnForAdmin(companyId, adminId) {
+  if (!adminId || !mongoose.isValidObjectId(adminId)) {
+    return { lines: [], signatureUrl: null }
+  }
+  const user = await User.findOne({ _id: adminId, companyId, isActive: { $ne: false } })
+    .populate('bankSignatureFileId', 'url')
+    .lean()
+  if (!user) return { lines: [], signatureUrl: null }
+  const lines = bankLinesFromDetails(user.bankDetails) ?? []
+  const sig =
+    user.bankSignatureFileId && typeof user.bankSignatureFileId === 'object'
+      ? user.bankSignatureFileId.url ?? null
+      : null
+  return { lines, signatureUrl: sig }
+}
+
+/**
+ * Dual-column bank panel for PDF invoices: left/right admins on the active instrument
+ * (or explicit leftAdminId / rightAdminId query params).
+ */
 export async function getInvoiceBankColumns(req) {
   const companyId = req.user.companyId
-  const [leftUser, rightUser] = await Promise.all([
-    User.findOne({ companyId, 'bankDetails.invoiceSlot': 1 })
-      .populate('bankSignatureFileId', 'url')
-      .lean(),
-    User.findOne({ companyId, 'bankDetails.invoiceSlot': 2 })
-      .populate('bankSignatureFileId', 'url')
-      .lean(),
-  ])
-  const leftLines = bankLinesFromDetails(leftUser?.bankDetails) ?? []
-  const rightLines = bankLinesFromDetails(rightUser?.bankDetails) ?? []
-  const leftSigUrl =
-    leftUser?.bankSignatureFileId && typeof leftUser.bankSignatureFileId === 'object'
-      ? leftUser.bankSignatureFileId.url ?? null
-      : null
-  const rightSigUrl =
-    rightUser?.bankSignatureFileId && typeof rightUser.bankSignatureFileId === 'object'
-      ? rightUser.bankSignatureFileId.url ?? null
-      : null
-  return {
-    left: { lines: leftLines, signatureUrl: leftSigUrl },
-    right: { lines: rightLines, signatureUrl: rightSigUrl },
+  let leftAdminId = req.query?.leftAdminId ? String(req.query.leftAdminId).trim() : ''
+  let rightAdminId = req.query?.rightAdminId ? String(req.query.rightAdminId).trim() : ''
+
+  if (!leftAdminId && !rightAdminId) {
+    const instrumentId = readInvoiceInstrumentId(req)
+    if (instrumentId) {
+      const peerIds = await instrumentCoworkerAdminIdStrings(req)
+      if (peerIds?.size) {
+        const ordered = orderPeerAdminIdsForInvoice(peerIds, req.user.id)
+        leftAdminId = ordered[0] ?? ''
+        rightAdminId = ordered[1] ?? ''
+      }
+    }
   }
+
+  if (!leftAdminId && !rightAdminId) {
+    leftAdminId = req.user.id
+  }
+
+  const [left, right] = await Promise.all([
+    bankColumnForAdmin(companyId, leftAdminId),
+    rightAdminId ? bankColumnForAdmin(companyId, rightAdminId) : Promise.resolve({ lines: [], signatureUrl: null }),
+  ])
+
+  return { left, right }
 }
 
 export async function attachUserBankSignature(req, file) {

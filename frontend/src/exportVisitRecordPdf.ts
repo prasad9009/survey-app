@@ -2,6 +2,7 @@ import jsPDF from 'jspdf'
 import invoiceLogo from './assets/logo.jpeg'
 import { savePdf } from './utils/downloadFile'
 import { formatEngineerLine } from './utils/formatEngineerContact'
+import { amountToWordsInr } from './utils/amountToWordsInr'
 import { formatPdfAmountCell } from './utils/pdfTableStyles'
 
 export type VisitRecordPdfAdminContact = {
@@ -20,6 +21,8 @@ export type VisitRecordPdfData = {
   adminContacts?: VisitRecordPdfAdminContact[]
   companyEmail?: string
   date: string
+  /** Instrument make/model for Inst Make row (falls back to machine). */
+  instMake?: string
   machine: string
   paymentMode: string
   paymentStatus?: string
@@ -205,13 +208,14 @@ export async function exportVisitRecordPdf(data: VisitRecordPdfData) {
 
   y += rowGap
   doc.text('DWG. Ref. By :', leftLabel, y)
-  lineValue(doc, leftValueStart, 170, y, data.dwgRefBy ?? '-')
-  doc.text('DWG. No. :', 174, y)
-  lineValue(doc, 195, 286, y, data.dwgNo ?? '-')
+  lineValue(doc, leftValueStart, 138, y, (data.dwgRefBy ?? '').trim() || '-')
+  doc.text('DWG. No. :', 142, y)
+  lineValue(doc, 168, 286, y, (data.dwgNo ?? '').trim() || '-')
 
   y += rowGap
+  const instMake = (data.instMake ?? data.machine ?? '').trim() || '-'
   doc.text('Inst Make :', leftLabel, y)
-  lineValue(doc, leftValueStart, 152, y, data.machine)
+  lineValue(doc, leftValueStart, 152, y, instMake)
   doc.text('Engg. Name :', 157, y)
   lineValue(doc, 184, 286, y, data.engineerName ?? '-')
 
@@ -236,11 +240,22 @@ export async function exportVisitRecordPdf(data: VisitRecordPdfData) {
   doc.text('Amount (Rs) :', 212, y)
   lineValue(doc, 248, 286, y, formatPdfAmountCell(data.amount))
 
-  y += rowGap
-  doc.text('Payment :', leftLabel, y)
-  lineValue(doc, leftValueStart, 120, y, data.paymentMode || '-')
-  doc.text('Status :', 125, y)
-  lineValue(doc, 152, 286, y, data.paymentStatus ?? '-')
+  const amountWords = amountToWordsInr(data.amount)
+  if (amountWords) {
+    y += rowGap
+    doc.text('Amount in words :', leftLabel, y)
+    doc.setDrawColor(40, 40, 40)
+    doc.line(leftValueStart, y + 0.8, 286, y + 0.8)
+    doc.setFont('helvetica', 'normal')
+    doc.setTextColor(24, 24, 24)
+    doc.setFontSize(11)
+    const wordsLines = doc.splitTextToSize(amountWords, 286 - leftValueStart - 2)
+    doc.text(wordsLines, leftValueStart + 1.2, y)
+    if (wordsLines.length > 1) y += (wordsLines.length - 1) * 4.5
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(12)
+    doc.setTextColor(35, 35, 35)
+  }
 
   const signY = 182
   doc.line(12, signY, 90, signY)

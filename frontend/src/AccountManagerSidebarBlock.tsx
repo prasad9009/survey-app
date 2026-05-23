@@ -1,17 +1,7 @@
 import { Briefcase, ChevronDown } from 'lucide-react'
 import { useEffect, useId, useMemo, useState } from 'react'
-import { ACCOUNT_MANAGERS } from './accountManagersData'
-import http from './api/http'
+import { useInstrumentCoworkers } from './hooks/queries'
 import { useAuth } from './context/AuthContext'
-
-type InstrumentPeerAm = {
-  adminId: string
-  accountManagerSlug: string | null
-  fullName: string
-  shortName: string
-  phone: string
-  email: string
-}
 
 type AccountManagerSidebarBlockProps = {
   pathname: string
@@ -24,34 +14,11 @@ export function AccountManagerSidebarBlock({
   onNavigate,
   onAfterNavigate,
 }: AccountManagerSidebarBlockProps) {
-  const { managers, token, activeInstrumentId } = useAuth()
-  const [instrumentPages, setInstrumentPages] = useState<InstrumentPeerAm[]>([])
-
-  useEffect(() => {
-    if (!token || !activeInstrumentId) {
-      setInstrumentPages([])
-      return
-    }
-    let cancelled = false
-    ;(async () => {
-      try {
-        const res = await http.get<{ ok: boolean; admins: InstrumentPeerAm[] }>('/api/instruments/coworkers', {
-          params: { instrumentId: activeInstrumentId },
-        })
-        if (cancelled) return
-        if (res.data?.ok) setInstrumentPages(res.data.admins ?? [])
-        else setInstrumentPages([])
-      } catch {
-        if (!cancelled) setInstrumentPages([])
-      }
-    })()
-    return () => {
-      cancelled = true
-    }
-  }, [token, activeInstrumentId])
+  const { managers, isLoading: authLoading } = useAuth()
+  const { coworkers, isLoading: coworkersLoading, isFetched: coworkersFetched } = useInstrumentCoworkers()
 
   const sidebarManagers = useMemo(() => {
-    const fromInstrument = instrumentPages
+    const fromInstrument = coworkers
       .filter((a) => a.accountManagerSlug)
       .map((a) => ({
         id: a.accountManagerSlug as string,
@@ -60,10 +27,13 @@ export function AccountManagerSidebarBlock({
         phone: a.phone,
       }))
     if (fromInstrument.length > 0) return fromInstrument
-    return managers.length
-      ? managers.map((m) => ({ id: m.id, name: m.name, shortName: m.shortName, phone: m.phone }))
-      : ACCOUNT_MANAGERS.map((m) => ({ id: m.id, name: m.name, shortName: m.shortName, phone: m.phone }))
-  }, [instrumentPages, managers])
+    if (managers.length > 0) {
+      return managers.map((m) => ({ id: m.id, name: m.name, shortName: m.shortName, phone: m.phone }))
+    }
+    return []
+  }, [coworkers, managers])
+
+  const listReady = !authLoading && (!coworkersLoading || coworkersFetched)
 
   const isUnderAccount = pathname.startsWith('/account-manager')
   const [open, setOpen] = useState(false)
@@ -150,51 +120,61 @@ export function AccountManagerSidebarBlock({
               <p className="px-2 pb-1.5 text-[10px] font-extrabold uppercase tracking-wide text-white/45">
                 Available account manager pages
               </p>
-              <ul className="flex flex-col gap-0.5" role="list">
-                {sidebarManagers.map((m) => {
-                  const path = `/account-manager/${m.id}`
-                  const subActive = pathname === path
-                  return (
-                    <li key={m.id}>
-                      <button
-                        type="button"
-                        onClick={() => go(path)}
-                        className={[
-                          'flex min-h-[44px] w-full items-center gap-2 rounded-md px-2.5 py-2 text-left transition-colors duration-150 active:opacity-90',
-                          subActive
-                            ? 'bg-[#f39b03]/22 text-[#f39b03] shadow-[inset_3px_0_0_0_rgba(243,155,3,0.95)]'
-                            : 'text-white/72 hover:bg-white/[0.07] hover:text-white',
-                        ].join(' ')}
-                      >
-                        <span
+              {!listReady ? (
+                <ul className="flex flex-col gap-1 px-1" aria-hidden>
+                  {[0, 1].map((i) => (
+                    <li key={i} className="h-11 animate-pulse rounded-md bg-white/[0.06]" />
+                  ))}
+                </ul>
+              ) : sidebarManagers.length === 0 ? (
+                <p className="px-2 py-2 text-[11px] font-semibold text-white/55">No account managers available</p>
+              ) : (
+                <ul className="flex flex-col gap-0.5" role="list">
+                  {sidebarManagers.map((m) => {
+                    const path = `/account-manager/${m.id}`
+                    const subActive = pathname === path
+                    return (
+                      <li key={m.id}>
+                        <button
+                          type="button"
+                          onClick={() => go(path)}
                           className={[
-                            'grid h-8 w-8 shrink-0 place-items-center rounded-md text-[11px] font-extrabold',
+                            'flex min-h-[44px] w-full items-center gap-2 rounded-md px-2.5 py-2 text-left transition-colors duration-150 active:opacity-90',
                             subActive
-                              ? 'bg-[#f39b03]/25 text-[#f39b03]'
-                              : 'bg-white/[0.06] text-white/55',
+                              ? 'bg-[#f39b03]/22 text-[#f39b03] shadow-[inset_3px_0_0_0_rgba(243,155,3,0.95)]'
+                              : 'text-white/72 hover:bg-white/[0.07] hover:text-white',
                           ].join(' ')}
-                          aria-hidden
                         >
-                          {m.shortName
-                            .split(/\s+/)
-                            .map((w) => w[0])
-                            .join('')
-                            .slice(0, 2)
-                            .toUpperCase()}
-                        </span>
-                        <span className="min-w-0 flex-1">
-                          <span className="block truncate text-[12.5px] font-semibold leading-snug">
-                            {m.name}
+                          <span
+                            className={[
+                              'grid h-8 w-8 shrink-0 place-items-center rounded-md text-[11px] font-extrabold',
+                              subActive
+                                ? 'bg-[#f39b03]/25 text-[#f39b03]'
+                                : 'bg-white/[0.06] text-white/55',
+                            ].join(' ')}
+                            aria-hidden
+                          >
+                            {m.shortName
+                              .split(/\s+/)
+                              .map((w) => w[0])
+                              .join('')
+                              .slice(0, 2)
+                              .toUpperCase()}
                           </span>
-                          <span className="block truncate text-[10px] font-semibold text-white/50">
-                            {m.phone}
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-[12.5px] font-semibold leading-snug">
+                              {m.name}
+                            </span>
+                            <span className="block truncate text-[10px] font-semibold text-white/50">
+                              {m.phone}
+                            </span>
                           </span>
-                        </span>
-                      </button>
-                    </li>
-                  )
-                })}
-              </ul>
+                        </button>
+                      </li>
+                    )
+                  })}
+                </ul>
+              )}
             </div>
           </div>
         </div>

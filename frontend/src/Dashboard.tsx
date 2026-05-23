@@ -551,6 +551,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
               </CardShell>
 
               <CardShell
+                className="mb-4 md:mb-0"
                 title="Pending Amount by Client"
                 action={
                   <button

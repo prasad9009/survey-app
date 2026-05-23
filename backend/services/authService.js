@@ -70,13 +70,28 @@ async function listActiveAdminContacts(companyId) {
     : []
 
   const instrumentIdsByAdmin = new Map()
-  for (const row of assignments) {
-    const adminId = row.adminId?.toString?.()
-    const instrumentId = row.instrumentId?.toString?.()
-    if (!adminId || !instrumentId) continue
+  const addInstrumentForAdmin = (adminId, instrumentId) => {
+    if (!adminId || !instrumentId) return
     const list = instrumentIdsByAdmin.get(adminId) ?? []
     if (!list.includes(instrumentId)) list.push(instrumentId)
     instrumentIdsByAdmin.set(adminId, list)
+  }
+  for (const row of assignments) {
+    addInstrumentForAdmin(row.adminId?.toString?.(), row.instrumentId?.toString?.())
+  }
+
+  const amByInstrument = adminIds.length
+    ? await AccountManager.find({
+        companyId,
+        adminId: { $in: adminIds },
+        isActive: true,
+        instrumentId: { $exists: true, $ne: null },
+      })
+        .select('adminId instrumentId')
+        .lean()
+    : []
+  for (const row of amByInstrument) {
+    addInstrumentForAdmin(row.adminId?.toString?.(), row.instrumentId?.toString?.())
   }
 
   return admins.map((a) => {

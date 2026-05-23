@@ -28,7 +28,9 @@ import {
   resetPasswordSchema,
   changePasswordSchema,
   createClientSchema,
+  updateClientSchema,
   createSiteSchema,
+  updateSiteSchema,
   createVisitSchema,
   updateVisitSchema,
   createTransactionSchema,
@@ -111,6 +113,12 @@ router.post('/clients', validateBody(createClientSchema), catchAsync(async (req,
   res.status(201).json({ ok: true, client: data })
 }))
 
+router.patch('/clients/:id', validateBody(updateClientSchema), catchAsync(async (req, res) => {
+  const id = parseObjectId(req.params.id, 'client id')
+  const data = await clientService.updateClient(req, id, req.body)
+  res.json({ ok: true, client: data })
+}))
+
 router.get('/clients/:id/report', catchAsync(async (req, res) => {
   const id = parseObjectId(req.params.id, 'client id')
   const year = typeof req.query?.year === 'string' ? req.query.year : undefined
@@ -134,6 +142,12 @@ router.post('/sites', validateBody(createSiteSchema), catchAsync(async (req, res
   const clientId = parseObjectId(req.body.clientId, 'clientId')
   const data = await siteService.createSite(req, { ...req.body, clientId })
   res.status(201).json({ ok: true, site: data })
+}))
+
+router.patch('/sites/:id', validateBody(updateSiteSchema), catchAsync(async (req, res) => {
+  const id = parseObjectId(req.params.id, 'site id')
+  const data = await siteService.updateSite(req, id, req.body)
+  res.json({ ok: true, site: data })
 }))
 
 router.get('/sites', catchAsync(async (req, res) => {

@@ -1,5 +1,5 @@
 import type { QueryClient } from '@tanstack/react-query'
-import { fetchClients, fetchDashboard, fetchSites } from '../api/surveyQueries'
+import { fetchClients, fetchDashboard, fetchInstrumentCoworkers, fetchSites } from '../api/surveyQueries'
 import { queryKeys } from './queryKeys'
 import { STALE_TIMES } from './staleTimes'
 
@@ -25,5 +25,12 @@ export async function prefetchAfterLogin(
       queryFn: () => fetchSites(year, instrumentId),
       staleTime: STALE_TIMES.sites,
     }),
+    instrumentId
+      ? qc.prefetchQuery({
+          queryKey: queryKeys.instrumentsCoworkers(instrumentId),
+          queryFn: () => fetchInstrumentCoworkers(instrumentId),
+          staleTime: STALE_TIMES.admins,
+        })
+      : Promise.resolve(),
   ])
 }

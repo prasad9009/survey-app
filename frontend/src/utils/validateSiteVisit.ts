@@ -20,7 +20,7 @@ export function validateSiteVisitForm(input: SiteVisitValidationInput): string |
   if (!input.site.trim()) return 'Please select a site.'
   if (!input.siteAddress.trim()) return 'Please enter the site address.'
   if (!input.machine.trim() || input.machine === '—') {
-    return 'Machine is not set for this site. Link an instrument to the site first.'
+    return 'Instrument make is not set for this site. Link an instrument to the site first.'
   }
 
   const hasBillingLine = input.billingLines.some((line) => {

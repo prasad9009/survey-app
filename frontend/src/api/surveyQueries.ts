@@ -46,6 +46,7 @@ export type ClientDto = {
   revenue: string
   received: string
   pending: string
+  advance: string
 }
 
 export async function fetchClients(year: string, instrumentId: string | null | undefined) {
@@ -82,6 +83,7 @@ export type VisitDto = {
   _id?: string
   visitMongoId?: string
   visitNo?: number
+  instrumentId?: string
   client: string
   site: string
   date: string
@@ -171,6 +173,23 @@ export async function fetchAccountManagerClientSites(managerId: string) {
   )
   if (!res.data?.ok) throw new Error('Could not load client sites')
   return res.data.clientSites ?? {}
+}
+
+export type InstrumentCoworkerDto = {
+  adminId: string
+  accountManagerSlug: string | null
+  fullName: string
+  shortName: string
+  phone: string
+  email: string
+}
+
+export async function fetchInstrumentCoworkers(instrumentId: string) {
+  const res = await http.get<{ ok: boolean; admins: InstrumentCoworkerDto[] }>('/api/instruments/coworkers', {
+    params: { instrumentId },
+  })
+  if (!res.data?.ok) throw new Error('Could not load instrument coworkers')
+  return res.data.admins ?? []
 }
 
 export type ReportRowDto = {

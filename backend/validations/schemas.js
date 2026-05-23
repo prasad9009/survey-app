@@ -57,10 +57,24 @@ export const createClientSchema = z.object({
   adminId: z.string().optional(),
 })
 
+export const updateClientSchema = createClientSchema.pick({
+  name: true,
+  phone: true,
+  email: true,
+  address: true,
+  notes: true,
+})
+
 export const createSiteSchema = z.object({
   clientId: z.string().min(1),
   name: z.string().min(1).max(200),
   locationLabel: z.string().max(200).optional(),
+})
+
+export const updateSiteSchema = z.object({
+  name: z.string().min(1).max(200).optional(),
+  locationLabel: z.string().max(200).optional(),
+  status: z.enum(['active', 'on_hold', 'completed']).optional(),
 })
 
 const billingLineSchema = z.object({

@@ -11,12 +11,13 @@ import {
   Pencil,
   LayoutGrid,
   LogOut,
+  Mail,
   MapPin,
   Menu,
+  Phone,
   Plus,
   Trash2,
   UsersRound,
-  User2,
   X,
   type LucideIcon,
 } from 'lucide-react'
@@ -48,15 +49,17 @@ import { formatBillingLinesForDisplay } from './utils/formatBillingLines'
 import { todayInvoiceDate } from './utils/invoiceDate'
 import { AppSelect } from './components/AppSelect'
 import { toast } from 'sonner'
-import { layoutBrandLogo } from './brandLogo'
 import { HeaderYearSelect } from './components/HeaderYearSelect'
 import { PageRefreshButton } from './components/PageRefreshButton'
 import { usePageRefresh } from './context/RefreshContext'
 import { signOut } from './signOut'
 import http from './api/http'
 import { useAuth } from './context/AuthContext'
+import { useInstrumentCoworkers } from './hooks/queries/useInstrumentCoworkers'
 import { runExport } from './utils/runExport'
 import { computeVisitListStats } from './utils/visitListStats'
+import { fetchInvoiceBankColumns } from './invoiceBankColumns'
+import { instrumentScopedAdmins, resolveLedgerReportHeaderContacts } from './utils/pdfAdminContacts'
 
 type NavItem = {
   label: string
@@ -84,6 +87,7 @@ type SiteVisitRecord = {
   client: string
   site: string
   date: string
+  instMake?: string
   machine: string
   amount: string
   /** Balance due (same display format as `amount`); from API `owedAmount` rules */
@@ -107,6 +111,7 @@ const toolbarSelectClass =
 
 export function SiteDetails({ onNavigate }: SiteDetailsProps) {
   const { token, user, company, companyAdmins, activeInstrumentId } = useAuth()
+  const { coworkers: instrumentCoworkers } = useInstrumentCoworkers()
   const { selectedYear } = useSelectedYear()
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const [visitsSearchQuery, setVisitsSearchQuery] = useState('')
@@ -166,6 +171,7 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
     contactPerson?: string
     dwgRefBy?: string
     dwgNo?: string
+    instMake?: string
   } | null>(null)
   const [editVisitOpen, setEditVisitOpen] = useState(false)
   const [editVisitInitial, setEditVisitInitial] = useState<EditSiteVisitInitial | null>(null)
@@ -198,6 +204,7 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
           contactPerson?: string
           dwgRefBy?: string
           dwgNo?: string
+          instMake?: string
           photoUrls?: string[]
           billingLines?: InvoicePdfBillingLine[]
           billingOtherCharges?: number
@@ -227,6 +234,7 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
         contactPerson: v.contactPerson,
         dwgRefBy: v.dwgRefBy,
         dwgNo: v.dwgNo,
+        instMake: v.instMake,
       })
     } catch {
       setVisitPhotoUrls([])
@@ -290,6 +298,7 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
 
   const effectiveVisitDate = visitDetailFromApi?.date?.trim() || visitDate
   const effectiveMachine = visitDetailFromApi?.machine?.trim() || machine
+  const effectiveInstMake = visitDetailFromApi?.instMake?.trim() || effectiveMachine
   const effectiveAmount = visitDetailFromApi?.amount?.trim() || amount
   const effectivePaymentMode = visitDetailFromApi?.paymentMode?.trim() || paymentMode
   const effectivePaymentStatus = visitDetailFromApi?.paymentStatus?.trim() || paymentStatus
@@ -320,6 +329,7 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
           site: string
           date: string
           machine: string
+          instMake?: string
           work: string
           amount: string
           pendingAmount?: string
@@ -329,6 +339,8 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
           siteAddress?: string
           sitePhone?: string
           engineerName?: string
+          dwgRefBy?: string
+          dwgNo?: string
           photoUrls?: string[]
           billingLines?: InvoicePdfBillingLine[]
           billingOtherCharges?: number
@@ -347,6 +359,7 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
         site: v.site,
         date: v.date,
         machine: v.machine,
+        instMake: v.instMake,
         amount: v.amount,
         pendingAmount: v.pendingAmount,
         paymentMode: v.paymentMode,
@@ -356,6 +369,8 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
         siteAddress: v.siteAddress,
         sitePhone: v.sitePhone,
         engineerName: v.engineerName,
+        dwgRefBy: v.dwgRefBy,
+        dwgNo: v.dwgNo,
         photoUrls: v.photoUrls,
         billingLines: v.billingLines,
         billingOtherCharges: v.billingOtherCharges,
@@ -477,6 +492,16 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
     const filterNote = hasActiveVisitFilters
       ? `Filtered export · ${filteredVisitRecords.length} of ${relatedVisitRecords.length} visits`
       : undefined
+    const { admin, coworker } = resolveLedgerReportHeaderContacts({
+      user,
+      companyAdmins,
+      activeInstrumentId,
+      instrumentCoworkers: instrumentCoworkers.map((c) => ({
+        adminId: c.adminId,
+        fullName: c.fullName,
+        phone: c.phone,
+      })),
+    })
     setExportBusy(true)
     void runExport('site report', () =>
       lazyExportSiteReportPdf({
@@ -487,6 +512,11 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
         lastVisit,
         year: selectedYear,
         filterNote,
+        companyName: company?.name,
+        adminName: admin.fullName,
+        adminPhone: admin.phone,
+        coworkerName: coworker?.fullName,
+        coworkerPhone: coworker?.phone,
         visits: filteredVisitRecords.map((r) => ({
           id: r.id,
           date: r.date,
@@ -573,9 +603,18 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
     if (siteId) next.set('siteId', siteId)
     return `/site-details?${next.toString()}`
   }
+  const instrumentHeaderAdminName = useMemo(() => {
+    const primary = instrumentScopedAdmins(companyAdmins, activeInstrumentId).find((a) =>
+      (a.fullName || '').trim(),
+    )
+    const raw = primary?.fullName?.trim() || user?.fullName?.trim() || ''
+    return raw.replace(/^Er\.\s*/i, '').trim()
+  }, [companyAdmins, activeInstrumentId, user?.fullName])
+
   const pageTitle = isVisitMode ? 'Site Visit Details' : 'Site Details'
   const backPath = isVisitMode ? '/site-visits' : '/clients-sites'
   const activeNavLabel = isVisitMode ? 'Site Visits' : 'Clients & Sites'
+  const mobileQuickNavActivePath = isVisitMode ? '/site-visits' : '/clients-sites'
   const statusLabel = isVisitMode ? 'Visit Record' : status
   const mobileBottomNav = [
     { label: 'Dashboard', path: '/dashboard', icon: LayoutGrid },
@@ -619,33 +658,40 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
 
   const siteAddressLine = [name, effectiveLocation].filter(Boolean).join(', ')
 
+  const loadInvoiceBankColumns = useCallback(
+    () => fetchInvoiceBankColumns(activeInstrumentId),
+    [activeInstrumentId],
+  )
+
   const handleIndividualVisitInvoice = (record: SiteVisitRecord) => {
     if (exportBusy) return
     const pendingNum = pendingAmountNum(record)
     const hasBilling = Boolean(record.billingLines?.length)
     setExportBusy(true)
-    void runExport('invoice', () =>
-      lazyExportInvoicePdf({
-      client,
-      site: `${siteAddressLine} (Visit ${record.id})`,
-      workType: record.machine,
-      totalPoints: 1,
-      ratePerPoint: pendingNum > 0 ? pendingNum : 0,
-      baseCharge: 0,
-      extraCharges: 0,
-      discount: 0,
-      invoiceDate: todayInvoiceDate(),
-      visitId: record.id,
-      paymentStatus: record.paymentStatus,
-      pendingAmount: pendingNum,
-      ...(hasBilling
-        ? {
-            billingLines: record.billingLines,
-            billingOtherCharges: record.billingOtherCharges ?? 0,
-          }
-        : {}),
-      }),
-    ).finally(() => setExportBusy(false))
+    void runExport('invoice', async () => {
+      const bankColumns = await loadInvoiceBankColumns()
+      return lazyExportInvoicePdf({
+        client,
+        site: `${siteAddressLine} (Visit ${record.id})`,
+        workType: record.machine,
+        totalPoints: 1,
+        ratePerPoint: pendingNum > 0 ? pendingNum : 0,
+        baseCharge: 0,
+        extraCharges: 0,
+        discount: 0,
+        invoiceDate: todayInvoiceDate(),
+        visitId: record.id,
+        paymentStatus: record.paymentStatus,
+        pendingAmount: pendingNum,
+        bankColumns,
+        ...(hasBilling
+          ? {
+              billingLines: record.billingLines,
+              billingOtherCharges: record.billingOtherCharges ?? 0,
+            }
+          : {}),
+      })
+    }).finally(() => setExportBusy(false))
   }
 
   const openEditVisit = (record?: SiteVisitRecord) => {
@@ -683,15 +729,17 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
       amount: pendingAmountNum(r),
     }))
     setExportBusy(true)
-    void runExport('combined invoice', () =>
-      lazyExportCombinedSiteInvoicePdf({
+    void runExport('combined invoice', async () => {
+      const bankColumns = await loadInvoiceBankColumns()
+      return lazyExportCombinedSiteInvoicePdf({
         client,
         site: name,
         location: effectiveLocation || undefined,
         invoiceDate: todayInvoiceDate(),
         visits,
-      }),
-    ).finally(() => setExportBusy(false))
+        bankColumns,
+      })
+    }).finally(() => setExportBusy(false))
   }
 
   const handleExportVisitPdf = (record: {
@@ -699,6 +747,7 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
     visitNo?: number
     date: string
     machine: string
+    instMake?: string
     amount: string
     paymentMode: string
     paymentStatus?: string
@@ -730,17 +779,17 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
         companyEmail: company?.email,
         date: record.date,
         machine: record.machine,
+        instMake: record.instMake?.trim() || effectiveInstMake,
         paymentMode: record.paymentMode,
-        paymentStatus: record.paymentStatus,
         amount: record.amount,
         notes: record.notes,
         contactPerson: effectiveContactPerson,
         phone: reportPhone || '-',
-        dwgRefBy: record.dwgRefBy?.trim() || visitDetailFromApi?.dwgRefBy?.trim() || '—',
-        dwgNo: record.dwgNo?.trim() || visitDetailFromApi?.dwgNo?.trim() || '—',
+        dwgRefBy: record.dwgRefBy?.trim() || visitDetailFromApi?.dwgRefBy?.trim() || '',
+        dwgNo: record.dwgNo?.trim() || visitDetailFromApi?.dwgNo?.trim() || '',
         work: formatBillingLinesForDisplay(
           record.billingLines ?? visitBillingForInvoice.billingLines,
-          record.work ?? effectiveWork,
+          '—',
           ', ',
         ),
         engineerName: reportEngineer || '-',
@@ -751,14 +800,6 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
 
   const detailCards: { title: string; value: string; icon: LucideIcon; tone: string; cardTint: string }[] = isVisitMode
     ? [
-        {
-          title: 'Client Name',
-          value: client,
-          icon: User2,
-          tone: 'bg-sky-100 text-sky-700',
-          cardTint: 'bg-sky-50/90',
-        },
-      
         {
           title: 'Visit No.',
           value: effectiveVisitNo != null ? String(effectiveVisitNo) : '—',
@@ -792,13 +833,6 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
         },
       ]
     : [
-    {
-      title: 'Client',
-      value: client,
-      icon: User2,
-      tone: 'bg-sky-100 text-sky-700',
-      cardTint: 'bg-sky-50/90',
-    },
     {
       title: 'Location',
       value: effectiveLocation || '—',
@@ -897,68 +931,116 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
             'fixed inset-y-0 left-0 z-50 flex w-[280px] flex-col overflow-y-auto bg-gradient-to-b from-[#050505] via-[#0b0b0b] to-[#040404] pb-20 text-white transition-transform duration-300 lg:hidden',
             isSidebarOpen ? 'translate-x-0' : '-translate-x-full',
           ].join(' ')}
+          aria-label="Profile"
         >
-          <div className="flex items-center justify-between px-6 pt-6">
-            <img
-              src={layoutBrandLogo}
-              alt="Samarth Land Surveyors"
-              className="h-10 w-auto"
-              draggable={false}
-            />
+          <div className="flex items-center justify-between px-5 pt-6">
+            <span className="text-sm font-extrabold tracking-tight text-white">Profile</span>
             <button
               type="button"
               className="grid h-9 w-9 place-items-center rounded-xl bg-white/10 hover:bg-white/20"
-              aria-label="Close menu"
+              aria-label="Close profile"
               onClick={() => setIsSidebarOpen(false)}
             >
               <X size={18} />
             </button>
           </div>
 
-          <nav className="mt-4 flex-1 px-3">
-            <div className="space-y-1">
-              {navItems.map((item) => {
-                if (item.label === 'Account Manager') {
-                  return (
-                    <Fragment key="account-manager-mobile">
-                      <AccountManagerSidebarBlock
-                        pathname={routerPathname}
-                        onNavigate={onNavigate}
-                        onAfterNavigate={() => setIsSidebarOpen(false)}
-                      />
-                    </Fragment>
-                  )
-                }
-                const active = item.label === activeNavLabel
-                const isLogout = item.label === 'Log Out'
-                return (
-                  <button
-                    type="button"
-                    key={item.label}
-                    onClick={() => handleNavClick(item.label)}
-                    className={[
-                      'group flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-[13px] font-semibold transition',
-                      isLogout
-                        ? 'bg-red-500/15 text-red-300 ring-1 ring-red-400/35 hover:bg-red-500/20 hover:text-red-200'
-                        : active
-                          ? 'bg-[#f39b03]/18 text-[#f39b03] ring-1 ring-[#f39b03]/30'
-                          : 'text-white/85 hover:bg-white/5 hover:text-white',
-                    ].join(' ')}
+          <div className="mt-6 px-5">
+            <div className="rounded-2xl bg-white/5 p-4 ring-1 ring-white/10">
+              <div className="flex flex-col items-center text-center">
+                <div className="grid h-16 w-16 place-items-center rounded-2xl bg-white/10 text-white ring-1 ring-white/15">
+                  <CircleUserRound size={32} strokeWidth={1.75} />
+                </div>
+                <div className="mt-3 text-base font-extrabold text-white">
+                  {instrumentHeaderAdminName || user?.fullName || 'User'}
+                </div>
+                <div className="mt-1 text-xs font-semibold text-white/65">
+                  {user?.role === 'super_admin' ? 'Super Admin' : 'Admin'}
+                </div>
+              </div>
+              <div className="mt-4 space-y-2 border-t border-white/10 pt-4">
+                {user?.email ? (
+                  <a
+                    href={`mailto:${user.email}`}
+                    className="flex items-center gap-2 rounded-xl px-2 py-2 text-left text-xs font-semibold text-white/90 hover:bg-white/5"
                   >
-                    <span
-                      className={[
-                        'grid h-8 w-8 place-items-center rounded-lg',
-                        isLogout ? 'bg-red-500/18 text-red-300' : active ? 'bg-[#f39b03]/14' : 'bg-white/5',
-                      ].join(' ')}
-                    >
-                      {item.icon}
+                    <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-white/10 text-[#f39b03]">
+                      <Mail size={15} />
                     </span>
-                    <span className="truncate">{item.label}</span>
-                  </button>
-                )
-              })}
+                    <span className="min-w-0 truncate">{user.email}</span>
+                  </a>
+                ) : company?.email ? (
+                  <a
+                    href={`mailto:${company.email}`}
+                    className="flex items-center gap-2 rounded-xl px-2 py-2 text-left text-xs font-semibold text-white/90 hover:bg-white/5"
+                  >
+                    <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-white/10 text-[#f39b03]">
+                      <Mail size={15} />
+                    </span>
+                    <span className="min-w-0 truncate">{company.email}</span>
+                  </a>
+                ) : null}
+                {user?.phone ? (
+                  <a
+                    href={`tel:${user.phone.replace(/\s/g, '')}`}
+                    className="flex items-center gap-2 rounded-xl px-2 py-2 text-left text-xs font-semibold text-white/90 hover:bg-white/5"
+                  >
+                    <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-white/10 text-[#f39b03]">
+                      <Phone size={15} />
+                    </span>
+                    <span>{user.phone}</span>
+                  </a>
+                ) : null}
+              </div>
             </div>
-          </nav>
+          </div>
+
+          <div className="mt-5 px-5">
+            <div className="text-[11px] font-extrabold uppercase tracking-wide text-white/45">Quick navigation</div>
+            <div className="mt-2 space-y-2">
+              <AccountManagerSidebarBlock
+                pathname={routerPathname}
+                onNavigate={onNavigate}
+                onAfterNavigate={() => setIsSidebarOpen(false)}
+              />
+            </div>
+            <div className="mt-2 grid grid-cols-2 gap-2">
+              {[
+                { label: 'Dashboard', path: '/dashboard', icon: LayoutGrid },
+                { label: 'Clients', path: '/clients-sites', icon: UsersRound },
+                { label: 'Visits', path: '/site-visits', icon: MapPin },
+              ].map(({ label, path, icon: Icon }) => (
+                <button
+                  type="button"
+                  key={path}
+                  onClick={() => {
+                    onNavigate(path)
+                    setIsSidebarOpen(false)
+                  }}
+                  className={[
+                    'flex flex-col items-center gap-1.5 rounded-xl px-2 py-3 text-[11px] font-bold ring-1 transition',
+                    path === mobileQuickNavActivePath
+                      ? 'bg-white/10 text-[#f39b03] ring-[#f39b03]/35'
+                      : 'bg-white/5 text-white/85 ring-white/10 hover:bg-white/10',
+                  ].join(' ')}
+                >
+                  <Icon size={18} />
+                  <span className="truncate">{label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="mt-6 flex-1 px-5">
+            <button
+              type="button"
+              onClick={() => handleNavClick('Log Out')}
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-red-500/15 py-3 text-sm font-bold text-red-200 ring-1 ring-red-400/35 hover:bg-red-500/25"
+            >
+              <LogOut size={18} />
+              Log Out
+            </button>
+          </div>
         </aside>
 
         <main className="flex min-h-0 min-w-0 flex-1 flex-col lg:ml-[280px]">
@@ -1031,8 +1113,12 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
                     <CircleUserRound size={18} />
                   </div>
                   <div className="min-w-0 text-left">
-                    <div className="truncate text-xs font-extrabold text-neutral-900 sm:text-sm">Er. Shubham Bhoi</div>
-                    <div className="text-[11px] font-semibold text-neutral-600">Admin</div>
+                    <div className="truncate text-xs font-extrabold text-neutral-900 sm:text-sm">
+                      {instrumentHeaderAdminName || '—'}
+                    </div>
+                    <div className="text-[11px] font-semibold text-neutral-600">
+                      {user?.role === 'super_admin' ? 'Super Admin' : 'Admin'}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1044,6 +1130,9 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
               <section className={`bg-neutral-900/[0.04] p-4 md:bg-white md:p-6 ${surfaceCardClass}`}>
                 <div className="text-[11px] font-semibold text-neutral-500 md:text-sm">Site Name</div>
                 <div className="mt-1 text-lg font-extrabold tracking-tight text-neutral-950 md:text-3xl">{name}</div>
+                <p className="mt-2 text-[11px] font-semibold text-neutral-700 md:text-sm">
+                  <span className="font-extrabold text-neutral-500">Client:</span> {client}
+                </p>
                 <div className="mt-3 flex flex-col gap-2">
                   <div className="hidden items-center rounded-full bg-[#f39b03]/12 px-3 py-1 text-xs font-extrabold text-[#c97702] ring-1 ring-[#f39b03]/25 md:inline-flex w-fit">
                     {statusLabel}
@@ -1141,7 +1230,11 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
                 <CardShell title="Visit Details" className="overflow-hidden" bodyClassName="p-0">
                   <div className="grid grid-cols-1 gap-3 p-4 text-sm font-semibold text-neutral-700 sm:grid-cols-2 sm:px-6 sm:py-5">
                     <p>
-                      <span className="text-neutral-500">Machine:</span> {effectiveMachine}
+                      <span className="text-neutral-500">Inst. make:</span> {effectiveInstMake}
+                    </p>
+                    <p>
+                      <span className="text-neutral-500">DWG Ref. By:</span>{' '}
+                      {visitDetailFromApi?.dwgRefBy?.trim() || '—'}
                     </p>
                     <p>
                       <span className="text-neutral-500">Payment Mode:</span> {effectivePaymentMode}
@@ -1157,7 +1250,12 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
                       {visitDetailFromApi?.dwgNo?.trim() || '—'}
                     </p>
                     <p className="sm:col-span-2">
-                      <span className="text-neutral-500">Work Details:</span> {effectiveWork}
+                      <span className="text-neutral-500">Particulars:</span>{' '}
+                      {formatBillingLinesForDisplay(
+                        visitBillingForInvoice.billingLines,
+                        effectiveWork || '—',
+                        '; ',
+                      )}
                     </p>
                   </div>
                   <div className="flex flex-col gap-2 border-t border-neutral-200 px-4 py-3 pb-6 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3 sm:px-6 sm:py-4 md:pb-4">
@@ -1177,14 +1275,16 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
                           visitNo: effectiveVisitNo,
                           date: effectiveVisitDate,
                           machine: effectiveMachine,
+                          instMake: effectiveInstMake,
                           amount: effectiveAmount,
                           paymentMode: effectivePaymentMode,
-                          paymentStatus: effectivePaymentStatus,
                           notes: effectiveNotes,
-                          work: effectiveWork,
                           siteAddress: effectiveLocation,
                           sitePhone: effectivePhone,
                           engineerName: effectiveEngineerName,
+                          dwgRefBy: visitDetailFromApi?.dwgRefBy,
+                          dwgNo: visitDetailFromApi?.dwgNo,
+                          billingLines: visitBillingForInvoice.billingLines,
                         })
                       }
                       className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-[#f39b03] px-4 text-xs font-extrabold text-white transition hover:bg-[#e18e03] sm:text-sm"
@@ -1229,8 +1329,9 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
                             ? parseVisitAmount(visitPendingForInvoice)
                             : parseVisitAmount(effectiveAmount)
                         setExportBusy(true)
-                        void runExport('invoice', () =>
-                          lazyExportInvoicePdf({
+                        void runExport('invoice', async () => {
+                          const bankColumns = await loadInvoiceBankColumns()
+                          return lazyExportInvoicePdf({
                             client,
                             site: `${siteAddressLine} (Visit ${visitId})`,
                             workType: effectiveMachine,
@@ -1243,14 +1344,15 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
                             visitId: visitId !== '-' ? visitId : undefined,
                             paymentStatus: effectivePaymentStatus !== '-' ? effectivePaymentStatus : undefined,
                             pendingAmount: pendingForVisit,
+                            bankColumns,
                             ...(visitBillingForInvoice.billingLines.length
                               ? {
                                   billingLines: visitBillingForInvoice.billingLines,
                                   billingOtherCharges: visitBillingForInvoice.billingOtherCharges,
                                 }
                               : {}),
-                          }),
-                        ).finally(() => setExportBusy(false))
+                          })
+                        }).finally(() => setExportBusy(false))
                       }}
                       className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-neutral-200 bg-white px-4 text-xs font-extrabold text-neutral-800 ring-1 ring-black/5 transition hover:bg-neutral-50 sm:text-sm disabled:opacity-50"
                     >
@@ -1348,14 +1450,16 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
                                       visitNo: record.visitNo,
                                       date: record.date,
                                       machine: record.machine,
+                                      instMake: record.instMake,
                                       amount: record.amount,
                                       paymentMode: record.paymentMode,
-                                      paymentStatus: record.paymentStatus,
                                       notes: record.notes,
-                                      work: record.work,
                                       siteAddress: record.siteAddress,
                                       sitePhone: record.sitePhone,
                                       engineerName: record.engineerName,
+                                      dwgRefBy: record.dwgRefBy,
+                                      dwgNo: record.dwgNo,
+                                      billingLines: record.billingLines,
                                       photoUrls: record.photoUrls,
                                     })
                                   }}
@@ -1447,14 +1551,16 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
                                         visitNo: record.visitNo,
                                         date: record.date,
                                         machine: record.machine,
+                                        instMake: record.instMake,
                                         amount: record.amount,
                                         paymentMode: record.paymentMode,
-                                        paymentStatus: record.paymentStatus,
                                         notes: record.notes,
-                                        work: record.work,
                                         siteAddress: record.siteAddress,
                                         sitePhone: record.sitePhone,
                                         engineerName: record.engineerName,
+                                        dwgRefBy: record.dwgRefBy,
+                                        dwgNo: record.dwgNo,
+                                        billingLines: record.billingLines,
                                         photoUrls: record.photoUrls,
                                       })
                                     }}

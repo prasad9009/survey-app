@@ -42,7 +42,11 @@ import { layoutBrandLogo } from './brandLogo'
 import { HeaderYearSelect } from './components/HeaderYearSelect'
 import { BackgroundRefreshIndicator } from './components/BackgroundRefreshIndicator'
 import { PageRefreshButton } from './components/PageRefreshButton'
-import { useClients, useSites, useSiteVisits } from './hooks/queries'
+import { useClients, useInstrumentCoworkers, useSites, useSiteVisits } from './hooks/queries'
+import {
+  instrumentScopedAdmins,
+  resolveInstrumentReportHeaderContacts,
+} from './utils/pdfAdminContacts'
 import { invalidateAfterVisitChange } from './lib/invalidate'
 import { useQueryClient } from '@tanstack/react-query'
 import { getHeaderDateLabel } from './headerDateLabel'
@@ -71,15 +75,13 @@ const navItems: NavItem[] = [
   { label: 'Log Out', icon: <LogOut size={16} /> },
 ]
 
-function machineLabelFromSite(site: { instrumentName?: string; instrumentCategory?: string } | undefined): string {
-  if (!site) return 'Total Station'
-  const cat = (site.instrumentCategory ?? '').toLowerCase()
-  if (cat.includes('total station')) return 'Total Station'
-  if (cat.includes('auto level') || (cat.includes('level') && !cat.includes('total'))) return 'Auto Level'
-  if (cat.includes('drone')) return 'Drone Survey'
-  if (cat.includes('gps') || cat.includes('gnss') || cat.includes('dgps')) return 'GPS / GNSS'
+/** Instrument make/model label for visit records and PDF Inst Make row. */
+function instMakeFromSite(site: { instrumentName?: string; instrumentCategory?: string } | undefined): string {
+  if (!site) return '—'
   const name = (site.instrumentName ?? '').trim()
-  return name || 'Total Station'
+  if (name) return name
+  const cat = (site.instrumentCategory ?? '').trim()
+  return cat || '—'
 }
 
 type PendingVisitPhoto = { id: string; src: string; file: File }
@@ -91,6 +93,7 @@ type VisitRecord = {
   _id?: string
   visitMongoId?: string
   visitNo?: number
+  instrumentId?: string
   client: string
   site: string
   date: string
@@ -134,7 +137,8 @@ function defaultBillingLines(): BillingLineDraft[] {
 
 export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
   const queryClient = useQueryClient()
-  const { user, activeInstrumentId } = useAuth()
+  const { user, company, companyAdmins, instruments, activeInstrumentId } = useAuth()
+  const { coworkers: instrumentCoworkers } = useInstrumentCoworkers()
   const { selectedYear } = useSelectedYear()
   const { pathname, search } = useLocation()
   const clientsQuery = useClients()
@@ -151,7 +155,7 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
   const [client, setClient] = useState('')
   const [site, setSite] = useState('')
   const [visitDate] = useState(() => getHeaderDateLabel())
-  const [machine, setMachine] = useState('Total Station')
+  const [machine, setMachine] = useState('—')
   const [engineerName, setEngineerName] = useState('')
   const [dwgRefBy, setDwgRefBy] = useState('')
   const [dwgNo, setDwgNo] = useState('')
@@ -159,10 +163,7 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
   const [sitePhone, setSitePhone] = useState('')
   const [billingLines, setBillingLines] = useState<BillingLineDraft[]>(() => defaultBillingLines())
   const [billingOtherCharges, setBillingOtherCharges] = useState('0')
-  const [workDetails, setWorkDetails] = useState(
-    'Topographic survey for layout planning',
-  )
-  const [notes, setNotes] = useState('Completed boundary points and levels.')
+  const [notes, setNotes] = useState('')
   const [photos, setPhotos] = useState<PendingVisitPhoto[]>(initialPhotos)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const formId = useId()
@@ -194,7 +195,33 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
     return { sitesByClient: grouped, apiSites: flat }
   }, [sitesQuery.data])
 
-  const visitRecords = (visitsQuery.data ?? []) as VisitRecord[]
+  const visitRecordsRaw = (visitsQuery.data ?? []) as VisitRecord[]
+
+  /** Visits for the active instrument only (matches API scope; filters legacy rows without instrumentId). */
+  const visitRecords = useMemo(() => {
+    if (!activeInstrumentId) return visitRecordsRaw
+    const allowedSites = new Set(
+      (sitesQuery.data ?? []).map((s) => `${s.clientName}\0${s.name}`),
+    )
+    return visitRecordsRaw.filter((r) => {
+      if (r.instrumentId) return r.instrumentId === activeInstrumentId
+      return allowedSites.has(`${r.client}\0${r.site}`)
+    })
+  }, [visitRecordsRaw, sitesQuery.data, activeInstrumentId])
+
+  const instrumentHeaderAdminName = useMemo(() => {
+    const primary = instrumentScopedAdmins(companyAdmins, activeInstrumentId).find((a) =>
+      (a.fullName || '').trim(),
+    )
+    const raw = primary?.fullName?.trim() || user?.fullName?.trim() || ''
+    return raw.replace(/^Er\.\s*/i, '').trim()
+  }, [companyAdmins, activeInstrumentId, user?.fullName])
+
+  const activeInstrumentName = useMemo(() => {
+    if (!activeInstrumentId) return undefined
+    return instruments.find((i) => i.id === activeInstrumentId)?.name?.trim() || undefined
+  }, [instruments, activeInstrumentId])
+
   const listLoading = visitsQuery.isLoading && visitsQuery.data === undefined
   const listFetching = visitsQuery.isFetching || clientsQuery.isFetching || sitesQuery.isFetching
   const hasListData =
@@ -202,7 +229,7 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
 
   useEffect(() => {
     const s = apiSites.find((x) => x.clientName === client && x.name === site)
-    setMachine(machineLabelFromSite(s))
+    setMachine(instMakeFromSite(s))
     if (s?.location) setSiteAddress(s.location)
   }, [client, site, apiSites])
 
@@ -587,8 +614,12 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
                     <CircleUserRound size={18} />
                   </div>
                   <div className="min-w-0 text-left">
-                    <div className="truncate text-xs font-extrabold text-neutral-900 sm:text-sm">Er. Shubham Bhoi</div>
-                    <div className="text-[11px] font-semibold text-neutral-600">Admin</div>
+                    <div className="truncate text-xs font-extrabold text-neutral-900 sm:text-sm">
+                      {instrumentHeaderAdminName || '—'}
+                    </div>
+                    <div className="text-[11px] font-semibold text-neutral-600">
+                      {user?.role === 'super_admin' ? 'Super Admin' : 'Admin'}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -645,39 +676,38 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
                   </div>
                 </div>
               ) : (
-                <CardPanel className="flex flex-col gap-2.5 p-2.5 md:flex-row md:flex-wrap md:items-center md:justify-between md:gap-4 md:p-4">
-                  <div className="flex w-full min-w-0 flex-col gap-2 sm:flex-row sm:items-center md:max-w-none md:flex-1">
+                <CardPanel className="flex flex-col gap-2.5 p-2.5 md:flex-row md:items-center md:justify-between md:gap-4 md:p-4">
+                  <div className="w-full md:max-w-[780px]">
                     <input
                       type="search"
                       value={visitListSearch}
                       onChange={(e) => setVisitListSearch(e.target.value)}
                       placeholder="Search visits records..."
-                      className={[toolbarSearchInputClass, 'w-full sm:max-w-[min(100%,420px)]'].join(' ')}
+                      className={toolbarSearchInputClass}
                       aria-label="Search visit records"
                     />
-                    <div className="flex flex-wrap items-center gap-2">
-                      <label className="grid gap-1">
-                        <span className="sr-only">Pay status</span>
-                        <AppSelect
-                          value={visitPaymentStatusFilter}
-                          onChange={setVisitPaymentStatusFilter}
-                          className={visitToolbarSelectClass}
-                          aria-label="Filter by payment status"
-                          options={[
-                            { value: 'all', label: 'All pay status' },
-                            { value: 'Paid', label: 'Paid' },
-                            { value: 'Pending', label: 'Pending' },
-                            { value: 'Partial', label: 'Partial' },
-                            { value: 'Waived', label: 'Waived' },
-                          ]}
-                        />
-                      </label>
-                    </div>
                   </div>
-                  <div className="flex flex-wrap items-center gap-2">
+                  <div className="flex w-full flex-nowrap items-center gap-1.5 md:w-auto md:shrink-0">
+                    <AppSelect
+                      value={visitPaymentStatusFilter}
+                      onChange={setVisitPaymentStatusFilter}
+                      className={[visitToolbarSelectClass, 'min-w-0 flex-1 md:min-w-[9.5rem] md:flex-none'].join(' ')}
+                      aria-label="Filter by payment status"
+                      options={[
+                        { value: 'all', label: 'All pay status' },
+                        { value: 'Paid', label: 'Paid' },
+                        { value: 'Pending', label: 'Pending' },
+                        { value: 'Partial', label: 'Partial' },
+                        { value: 'Waived', label: 'Waived' },
+                      ]}
+                    />
                     {hasActiveVisitListFilters ? (
-                      <button type="button" onClick={clearVisitListFilters} className={toolbarSecondaryButtonClass}>
-                        Clear filters
+                      <button
+                        type="button"
+                        onClick={clearVisitListFilters}
+                        className={[toolbarSecondaryButtonClass, 'shrink-0'].join(' ')}
+                      >
+                        Clear
                       </button>
                     ) : null}
                     <button
@@ -686,6 +716,15 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
                       onClick={() => {
                         if (filteredVisitRecords.length === 0 || exportBusy) return
                         setExportBusy(true)
+                        const { admin, coworker } = resolveInstrumentReportHeaderContacts({
+                          companyAdmins,
+                          activeInstrumentId,
+                          instrumentCoworkers: instrumentCoworkers.map((c) => ({
+                            adminId: c.adminId,
+                            fullName: c.fullName,
+                            phone: c.phone,
+                          })),
+                        })
                         void runExport('PDF', () =>
                           lazyExportSiteVisitsPdf(
                             filteredVisitRecords.map((r) => ({
@@ -697,11 +736,20 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
                               paymentStatus: r.paymentStatus,
                               machine: r.machine,
                             })),
-                            { year: selectedYear, filterNote: visitListFilterNote },
+                            {
+                              year: selectedYear,
+                              filterNote: visitListFilterNote,
+                              instrumentName: activeInstrumentName,
+                              companyName: company?.name,
+                              adminName: admin.fullName,
+                              adminPhone: admin.phone,
+                              coworkerName: coworker?.fullName,
+                              coworkerPhone: coworker?.phone,
+                            },
                           ),
                         ).finally(() => setExportBusy(false))
                       }}
-                      className={toolbarSecondaryButtonClass}
+                      className={[toolbarSecondaryButtonClass, 'shrink-0'].join(' ')}
                     >
                       <Download className="h-4 w-4 shrink-0 opacity-80" aria-hidden />
                       {exportBusy ? 'Exporting…' : 'Export'}
@@ -709,10 +757,11 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
                     <button
                       type="button"
                       onClick={() => setShowAddForm(true)}
-                      className={toolbarPrimaryButtonClass}
+                      className={[toolbarPrimaryButtonClass, 'shrink-0'].join(' ')}
                     >
                       <Plus className={toolbarPlusIconClass} />
-                      Add new Site visit
+                      <span className="hidden sm:inline">Add new Site visit</span>
+                      <span className="sm:hidden">Add visit</span>
                     </button>
                   </div>
                 </CardPanel>
@@ -934,7 +983,6 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
                         dwgRefBy: dwgRefBy.trim() || undefined,
                         dwgNo: dwgNo.trim() || undefined,
                         contactPerson: engineerName.trim(),
-                        workDescription: workDetails,
                         machineLabel: machine,
                         billingLines: billingLines.map((line) => {
                           const q = parseFloat(line.quantity.replace(/[^\d.-]/g, '')) || 0
@@ -1000,7 +1048,7 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
                         amount: v.amount,
                         paymentStatus: v.paymentStatus,
                         notes,
-                        work: workDetails,
+                        work: v.work ?? '',
                         engineerName,
                         contactPerson: engineerName,
                       })
@@ -1072,12 +1120,12 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
                     </label>
 
                     <label className="grid gap-2">
-                      <span className="text-xs font-bold text-neutral-700">Machine Used</span>
+                      <span className="text-xs font-bold text-neutral-700">Inst. make</span>
                       <input
                         type="text"
                         readOnly
                         value={machine}
-                        title="Set automatically from the instrument linked to this site"
+                        title="Fetched from the instrument linked to this site"
                         className="h-11 w-full cursor-default rounded-xl border border-neutral-200 bg-neutral-50 px-3 text-sm font-semibold text-neutral-800 outline-none"
                       />
                     </label>
@@ -1268,17 +1316,6 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
                         Sum of each row (quantity × rate when both set, otherwise the line amount) + other charges
                         (rounded)
                       </span>
-                    </label>
-
-                    <label className="grid gap-2 md:col-span-2">
-                      <span className="text-xs font-bold text-neutral-700">Work Details / Description</span>
-                      <textarea
-                        value={workDetails}
-                        onChange={(e) => setWorkDetails(e.target.value)}
-                        rows={3}
-                        className="w-full resize-y rounded-xl border border-neutral-200 bg-white px-3 py-2.5 text-sm font-medium leading-relaxed text-neutral-900 outline-none transition placeholder:text-neutral-400 focus:border-[#f39b03]/80 focus:ring-2 focus:ring-[#f39b03]/20"
-                        placeholder="Describe the work completed on site…"
-                      />
                     </label>
 
                     <label className="grid gap-2 md:col-span-2">

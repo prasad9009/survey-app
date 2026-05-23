@@ -88,6 +88,60 @@ export async function listSitesForClient(req, clientId) {
   return out
 }
 
+function escapeRegex(s) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+export async function updateSite(req, siteId, body) {
+  const { effectiveInstrumentId } = await resolveInstrumentScope(req)
+  const site = await Site.findOne({
+    _id: siteId,
+    companyId: req.user.companyId,
+    ...(await sharedInstrumentOperationalScope(req)),
+  })
+  if (!site) throw new ApiError(404, 'Site not found')
+
+  const patch = {}
+  if (body.name != null) {
+    const name = body.name.trim()
+    if (!name) throw new ApiError(400, 'Site name is required')
+    const dup = await Site.findOne({
+      companyId: req.user.companyId,
+      clientId: site.clientId,
+      _id: { $ne: site._id },
+      name: new RegExp(`^${escapeRegex(name)}$`, 'i'),
+    }).lean()
+    if (dup) throw new ApiError(409, 'A site with this name already exists for this client')
+    patch.name = name
+  }
+  if (body.locationLabel !== undefined) {
+    patch.locationLabel = body.locationLabel?.trim() || undefined
+  }
+  if (body.status != null) {
+    patch.status = body.status
+  }
+
+  if (Object.keys(patch).length === 0) {
+    throw new ApiError(400, 'No changes to save')
+  }
+
+  Object.assign(site, patch)
+  await site.save()
+
+  const visitYearRange = visitDateRangeForYear(req.query?.year)
+  const { received, pending } = await siteFinancials(site._id, visitYearRange, effectiveInstrumentId)
+  const lastVisit = await lastVisitLabelForSite(site._id, visitYearRange, site.lastVisitAt)
+  return {
+    id: site._id.toString(),
+    name: site.name,
+    location: site.locationLabel || site.address || '—',
+    lastVisit,
+    status: statusLabel(site.status),
+    received: formatInr(received),
+    pending: formatInr(pending),
+  }
+}
+
 export async function createSite(req, { clientId, name, locationLabel }) {
   const { effectiveInstrumentId, allowedInstrumentIds } = await resolveInstrumentScope(req)
   const client = await Client.findOne({
