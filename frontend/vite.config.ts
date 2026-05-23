@@ -23,7 +23,7 @@ export default defineConfig(({ mode }) => {
       },
       injectRegister: 'auto',
       cleanupOutdatedCaches: true,
-      includeAssets: ['favicon.svg'],
+      includeAssets: ['favicon.png'],
       manifest: {
         id: '/',
         name: 'Samarth SurveyOS',

@@ -30,7 +30,10 @@ const resize = async (size, outfile) =>
     .png()
     .toFile(outfile)
 
+await resize(32, join(root, 'public', 'favicon.png'))
 await resize(192, join(outDir, 'icon-192.png'))
 await resize(512, join(outDir, 'icon-512.png'))
 
-console.info('Wrote public/icons/icon-192.png and public/icons/icon-512.png from src/assets/logo.jpeg')
+console.info(
+  'Wrote public/favicon.png, public/icons/icon-192.png, and public/icons/icon-512.png from src/assets/logo.jpeg',
+)
