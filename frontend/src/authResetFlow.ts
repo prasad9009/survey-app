@@ -4,9 +4,8 @@ import type { AxiosRequestConfig } from 'axios'
 export const RESET_EMAIL_KEY = 'survey_reset_email'
 export const RESET_STEP_KEY = 'survey_reset_step'
 
-/** Avoid global overlay, cold-start retries, and long hangs on SMTP. */
+/** Avoid cold-start retries and long hangs on SMTP. */
 export const authResetHttpConfig: AxiosRequestConfig = {
-  skipGlobalLoading: true,
   skipRetry: true,
   timeout: 20_000,
 }

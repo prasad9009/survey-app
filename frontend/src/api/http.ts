@@ -1,5 +1,4 @@
 import axios, { type AxiosError, type AxiosResponse, type InternalAxiosRequestConfig } from 'axios'
-import { beginTrackedRequest, endTrackedRequest } from './loadingBridge'
 import { withDedup } from './dedup'
 
 const TOKEN_KEY = 'survey_access_token'
@@ -39,31 +38,6 @@ function sleep(ms: number) {
   return new Promise<void>((resolve) => setTimeout(resolve, ms))
 }
 
-const MUTATION_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE'])
-
-/** Global overlay only for writes (save/delete) unless explicitly opted in. */
-export function shouldShowGlobalLoading(config: InternalAxiosRequestConfig): boolean {
-  if (config.skipGlobalLoading) return false
-  if (config.showGlobalLoading === true) return true
-  if (config.showGlobalLoading === false) return false
-  const method = (config.method ?? 'get').toUpperCase()
-  return MUTATION_METHODS.has(method)
-}
-
-function trackLoadingStart(config: InternalAxiosRequestConfig) {
-  if (!shouldShowGlobalLoading(config) || config._dedupJoined) return
-  if (!config._loadingSlotId) {
-    config._loadingSlotId = beginTrackedRequest(config)
-  }
-}
-
-function trackLoadingEnd(config?: InternalAxiosRequestConfig) {
-  if (!config?.skipGlobalLoading && config?._loadingSlotId) {
-    endTrackedRequest(config._loadingSlotId)
-    config._loadingSlotId = undefined
-  }
-}
-
 function isRetryableError(err: AxiosError): boolean {
   if (err.code === 'ERR_NETWORK' || err.code === 'ECONNABORTED' || !err.response) return true
   const status = err.response.status
@@ -95,15 +69,11 @@ http.interceptors.request.use((config) => {
   if (typeof FormData !== 'undefined' && config.data instanceof FormData) {
     delete config.headers['Content-Type']
   }
-  trackLoadingStart(config)
   return config
 })
 
 http.interceptors.response.use(
-  (res) => {
-    trackLoadingEnd(res.config)
-    return res
-  },
+  (res) => res,
   async (err: AxiosError) => {
     const config = err.config as InternalAxiosRequestConfig | undefined
 
@@ -121,7 +91,6 @@ http.interceptors.response.use(
       }
     }
 
-    trackLoadingEnd(config)
     handleAuthError(err)
     return Promise.reject(err)
   },

@@ -15,7 +15,6 @@ import App from './App.tsx'
 import { AuthReadyGate } from './components/AuthReadyGate'
 import ServerWakeUp from './components/ServerWakeUp'
 import { AuthProvider } from './context/AuthContext'
-import { LoadingProvider } from './context/LoadingContext'
 import { RefreshProvider } from './context/RefreshContext'
 import { SelectedYearProvider } from './context/SelectedYearContext'
 
@@ -28,18 +27,16 @@ createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <BrowserRouter>
       <ServerWakeUp>
-        <LoadingProvider>
-          <AuthProvider>
-            <AuthReadyGate>
-              <SelectedYearProvider>
-                <RefreshProvider>
-                  <AppBootstrap />
-                  <Toaster richColors position="top-center" />
-                </RefreshProvider>
-              </SelectedYearProvider>
-            </AuthReadyGate>
-          </AuthProvider>
-        </LoadingProvider>
+        <AuthProvider>
+          <AuthReadyGate>
+            <SelectedYearProvider>
+              <RefreshProvider>
+                <AppBootstrap />
+                <Toaster richColors position="top-center" />
+              </RefreshProvider>
+            </SelectedYearProvider>
+          </AuthReadyGate>
+        </AuthProvider>
       </ServerWakeUp>
     </BrowserRouter>
   </StrictMode>,

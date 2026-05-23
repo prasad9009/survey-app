@@ -3,7 +3,7 @@ import http from './http'
 
 export { getRequestDedupKey } from './dedup'
 
-/** Centralized API entry — uses shared axios client with loading, retry, and dedup. */
+/** Centralized API entry — uses shared axios client with retry and dedup. */
 export function apiRequest<T = unknown>(config: AxiosRequestConfig): Promise<AxiosResponse<T>> {
   return http.request<T>(config)
 }
