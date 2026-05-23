@@ -604,6 +604,7 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
           receivedBy: string
           notes?: string
         }>
+        totals?: { revenue: number; received: number; creditTotal: number; pending: number; advance?: number }
       }>(`/api/clients/${selectedClient.id}/report`, { params: { year: selectedYear } })
       if (!res.data?.ok) {
         toast.error('Could not load client report data')
@@ -616,6 +617,7 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
           sites: res.data.sites ?? selectedSites,
           visits: res.data.visits,
           credits: res.data.credits,
+          totals: res.data.totals,
         })
       })
     } catch {

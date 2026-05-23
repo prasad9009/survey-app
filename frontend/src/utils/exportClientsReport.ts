@@ -18,6 +18,7 @@ export type ClientExportRow = {
   revenue: string
   received: string
   pending: string
+  advance?: string
 }
 
 export type SiteExportRow = {
@@ -296,15 +297,20 @@ export async function exportClientPdf(data: ClientReportExportData) {
   y += 7
 
   const summaryCol1 = marginX
-  const summaryCol2 = marginX + 58
-  const summaryCol3 = marginX + 116
+  const summaryCol2 = marginX + 46
+  const summaryCol3 = marginX + 92
+  const summaryCol4 = marginX + 138
   const summaryFontSize = 10
+  const advanceDisplay =
+    client.advance?.trim() ||
+    (totals?.advance != null ? formatInrPlain(totals.advance) : 'Rs 0')
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(summaryFontSize)
   doc.setTextColor(82, 82, 82)
   doc.text('Total Revenue', summaryCol1, y)
   doc.text('Received', summaryCol2, y)
   doc.text('Pending', summaryCol3, y)
+  doc.text('Total Advance', summaryCol4, y)
   y += 5
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(summaryFontSize)
@@ -312,6 +318,7 @@ export async function exportClientPdf(data: ClientReportExportData) {
   doc.text(client.revenue, summaryCol1, y)
   doc.text(client.received, summaryCol2, y)
   doc.text(client.pending, summaryCol3, y)
+  doc.text(advanceDisplay, summaryCol4, y)
   if (totals) {
     y += 5
     doc.text(`Credits (transactions): ${formatInrPlain(totals.creditTotal)}`, marginX, y)
@@ -426,6 +433,8 @@ export async function exportClientPdf(data: ClientReportExportData) {
     y += 5
     doc.text(`Credit transactions total: ${formatInrPlain(totals.creditTotal)}`, marginX, y)
     y += 5
+    doc.text(`Total advance: ${formatInrPlain(totals.advance ?? 0)}`, marginX, y)
+    y += 5
     doc.setFont('helvetica', 'bold')
     doc.text(`Pending amount: ${formatInrPlain(totals.pending)}`, marginX, y)
   }
@@ -436,13 +445,26 @@ export async function exportClientPdf(data: ClientReportExportData) {
 }
 
 export async function exportClientExcel(data: ClientReportExportData) {
-  const { client, sites, visits = [], credits = [] } = data
+  const { client, sites, visits = [], credits = [], totals } = data
   const sections: string[] = []
+  const advanceDisplay =
+    client.advance?.trim() ||
+    (totals?.advance != null ? formatInrPlain(totals.advance) : 'Rs 0')
 
   sections.push(
     rowsToCsv(
-      ['Client', 'Phone', 'Sites', 'Revenue', 'Received', 'Pending'],
-      [[client.name, client.phone, client.sites, client.revenue, client.received, client.pending]],
+      ['Client', 'Phone', 'Sites', 'Revenue', 'Received', 'Pending', 'Total Advance'],
+      [
+        [
+          client.name,
+          client.phone,
+          client.sites,
+          client.revenue,
+          client.received,
+          client.pending,
+          advanceDisplay,
+        ],
+      ],
     ),
   )
   sections.push('')
