@@ -88,6 +88,7 @@ export type VisitDto = {
   site: string
   date: string
   machine: string
+  instMake?: string
   work: string
   amount: string
   pendingAmount?: string
@@ -96,7 +97,17 @@ export type VisitDto = {
   notes: string
   siteAddress?: string
   sitePhone?: string
+  engineerName?: string
   photoUrls?: string[]
+  dwgRefBy?: string
+  dwgNo?: string
+  billingLines?: Array<{
+    particular: string
+    quantity: number
+    rate: number
+    amount?: number
+  }>
+  billingOtherCharges?: number
 }
 
 export async function fetchVisits(year: string, instrumentId: string | null | undefined) {

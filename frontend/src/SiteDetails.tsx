@@ -21,8 +21,10 @@ import {
   X,
   type LucideIcon,
 } from 'lucide-react'
+import { useQueryClient } from '@tanstack/react-query'
 import { Fragment, useCallback, useMemo, useState, type ReactNode } from 'react'
 import { useLocation as useRouterLocation, useNavigate } from 'react-router-dom'
+import type { VisitDto } from './api/surveyQueries'
 import { useSelectedYear } from './context/SelectedYearContext'
 import { AccountManagerSidebarBlock } from './AccountManagerSidebarBlock'
 import { CollaborationBrandMark } from './CollaborationBrandMark'
@@ -55,7 +57,10 @@ import { usePageRefresh } from './context/RefreshContext'
 import { signOut } from './signOut'
 import http from './api/http'
 import { useAuth } from './context/AuthContext'
+import { useSiteVisits } from './hooks/queries'
 import { useInstrumentCoworkers } from './hooks/queries/useInstrumentCoworkers'
+import { useQueryScope } from './hooks/useScopeQuery'
+import { queryKeys } from './lib/queryKeys'
 import { runExport } from './utils/runExport'
 import { computeVisitListStats } from './utils/visitListStats'
 import { fetchInvoiceBankColumns } from './invoiceBankColumns'
@@ -106,6 +111,46 @@ type SiteVisitRecord = {
   dwgNo?: string
 }
 
+function visitDtoToSiteRecord(v: VisitDto): SiteVisitRecord {
+  return {
+    id: v.id,
+    visitMongoId: v.visitMongoId ?? v._id,
+    visitNo: v.visitNo,
+    client: v.client,
+    site: v.site,
+    date: v.date,
+    machine: v.machine,
+    instMake: v.instMake,
+    amount: v.amount,
+    pendingAmount: v.pendingAmount,
+    paymentMode: v.paymentMode,
+    paymentStatus: v.paymentStatus,
+    notes: v.notes,
+    work: v.work,
+    siteAddress: v.siteAddress,
+    sitePhone: v.sitePhone,
+    engineerName: v.engineerName,
+    photoUrls: v.photoUrls,
+    billingLines: v.billingLines as InvoicePdfBillingLine[] | undefined,
+    billingOtherCharges: v.billingOtherCharges,
+    dwgRefBy: v.dwgRefBy,
+    dwgNo: v.dwgNo,
+  }
+}
+
+function filterVisitsForSite(
+  visits: VisitDto[],
+  client: string,
+  siteName: string,
+  siteId: string,
+): SiteVisitRecord[] {
+  let rows = visits.map(visitDtoToSiteRecord)
+  if (siteId || (client !== 'Unknown Client' && siteName !== 'Unknown Site')) {
+    rows = rows.filter((v) => v.client === client && v.site === siteName)
+  }
+  return rows
+}
+
 const toolbarSelectClass =
   'h-8 min-w-[128px] flex-1 rounded-md border border-neutral-200 bg-white px-2.5 text-xs font-bold text-neutral-700 outline-none transition focus:border-[#f39b03]/80 focus:ring-2 focus:ring-[#f39b03]/20 md:h-10 md:min-w-[150px] md:rounded-lg md:px-3 md:text-sm sm:flex-initial'
 
@@ -113,6 +158,9 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
   const { token, user, company, companyAdmins, activeInstrumentId } = useAuth()
   const { coworkers: instrumentCoworkers } = useInstrumentCoworkers()
   const { selectedYear } = useSelectedYear()
+  const { year: scopeYear, instrumentId: scopeInstrumentId } = useQueryScope()
+  const queryClient = useQueryClient()
+  const visitsQuery = useSiteVisits()
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const [visitsSearchQuery, setVisitsSearchQuery] = useState('')
   const [visitMachineFilter, setVisitMachineFilter] = useState('all')
@@ -147,8 +195,6 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
   const contactPerson = urlParams.get('contactPerson') ?? engineerName
   const visitMongoId = urlParams.get('visitMongoId')
   const siteId = urlParams.get('siteId')?.trim() ?? ''
-  const [relatedVisitRecords, setRelatedVisitRecords] = useState<SiteVisitRecord[]>([])
-  const [visitsFetchState, setVisitsFetchState] = useState<'idle' | 'loading' | 'ok' | 'error'>('idle')
   const [visitPhotoUrls, setVisitPhotoUrls] = useState<string[]>([])
   const [visitBillingForInvoice, setVisitBillingForInvoice] = useState<{
     billingLines: InvoicePdfBillingLine[]
@@ -305,88 +351,23 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
   const effectiveNotes = visitDetailFromApi?.notes?.trim() || notes
   const effectiveWork = visitDetailFromApi?.work?.trim() || work
 
-  const loadSiteVisits = useCallback(async () => {
-    if (isVisitMode || !token) {
-      setRelatedVisitRecords([])
-      setVisitsFetchState('idle')
-      return
-    }
-    setVisitsFetchState('loading')
-    try {
-      const params: { year: string; siteId?: string; instrumentId?: string; _t?: number } = {
-        year: selectedYear,
-        _t: Date.now(),
-        ...(activeInstrumentId ? { instrumentId: activeInstrumentId } : {}),
-      }
-      if (siteId) params.siteId = siteId
-      const res = await http.get<{
-        ok: boolean
-        visits: Array<{
-          id: string
-          visitMongoId?: string
-          visitNo?: number
-          client: string
-          site: string
-          date: string
-          machine: string
-          instMake?: string
-          work: string
-          amount: string
-          pendingAmount?: string
-          paymentMode: string
-          paymentStatus: string
-          notes: string
-          siteAddress?: string
-          sitePhone?: string
-          engineerName?: string
-          dwgRefBy?: string
-          dwgNo?: string
-          photoUrls?: string[]
-          billingLines?: InvoicePdfBillingLine[]
-          billingOtherCharges?: number
-        }>
-      }>('/api/visits', { params })
-      if (!res.data?.ok) {
-        setRelatedVisitRecords([])
-        setVisitsFetchState('error')
-        return
-      }
-      let rows: SiteVisitRecord[] = (res.data.visits ?? []).map((v) => ({
-        id: v.id,
-        visitMongoId: v.visitMongoId,
-        visitNo: v.visitNo,
-        client: v.client,
-        site: v.site,
-        date: v.date,
-        machine: v.machine,
-        instMake: v.instMake,
-        amount: v.amount,
-        pendingAmount: v.pendingAmount,
-        paymentMode: v.paymentMode,
-        paymentStatus: v.paymentStatus,
-        notes: v.notes,
-        work: v.work,
-        siteAddress: v.siteAddress,
-        sitePhone: v.sitePhone,
-        engineerName: v.engineerName,
-        dwgRefBy: v.dwgRefBy,
-        dwgNo: v.dwgNo,
-        photoUrls: v.photoUrls,
-        billingLines: v.billingLines,
-        billingOtherCharges: v.billingOtherCharges,
-      }))
-      if (!siteId && client !== 'Unknown Client' && name !== 'Unknown Site') {
-        rows = rows.filter((v) => v.client === client && v.site === name)
-      }
-      setRelatedVisitRecords(rows)
-      setVisitsFetchState('ok')
-    } catch {
-      setRelatedVisitRecords([])
-      setVisitsFetchState('error')
-    }
-  }, [isVisitMode, token, selectedYear, siteId, client, name])
+  const relatedVisitRecords = useMemo(() => {
+    if (isVisitMode || !visitsQuery.data) return []
+    return filterVisitsForSite(visitsQuery.data, client, name, siteId)
+  }, [isVisitMode, visitsQuery.data, client, name, siteId])
 
-  usePageRefresh(loadSiteVisits, [loadSiteVisits], { enabled: !isVisitMode && Boolean(token) })
+  const visitsFetchState = useMemo((): 'idle' | 'loading' | 'ok' | 'error' => {
+    if (isVisitMode) return 'idle'
+    if (visitsQuery.isPending && visitsQuery.data === undefined) return 'loading'
+    if (visitsQuery.isError && visitsQuery.data === undefined) return 'error'
+    return 'ok'
+  }, [isVisitMode, visitsQuery.isPending, visitsQuery.isError, visitsQuery.data])
+
+  const reloadSiteVisits = useCallback(() => {
+    void visitsQuery.refetch()
+  }, [visitsQuery])
+
+  usePageRefresh(reloadSiteVisits, [reloadSiteVisits], { enabled: !isVisitMode && Boolean(token) })
 
   const siteVisitStats = useMemo(() => computeVisitListStats(relatedVisitRecords), [relatedVisitRecords])
 
@@ -531,10 +512,6 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
     ).finally(() => setExportBusy(false))
   }
 
-  const reloadSiteVisits = () => {
-    void loadSiteVisits()
-  }
-
   const buildSiteListParams = useCallback(() => {
     const params = new URLSearchParams({ client, name })
     if (siteId) params.set('siteId', siteId)
@@ -565,7 +542,10 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
       }
       toast.success(res.data.message ?? 'Site visit and related photos deleted successfully')
       setPendingDeleteVisit(null)
-      setRelatedVisitRecords((prev) => prev.filter((v) => v.visitMongoId !== mid))
+      queryClient.setQueryData<VisitDto[]>(
+        queryKeys.visits(scopeYear, scopeInstrumentId),
+        (prev) => prev?.filter((v) => (v.visitMongoId ?? v._id) !== mid),
+      )
       if (isVisitMode && visitMongoId === mid) {
         navigate(`/site-details?${buildSiteListParams().toString()}`, { replace: true })
         return
