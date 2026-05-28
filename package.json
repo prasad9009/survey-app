@@ -1,5 +1,5 @@
 {
-  "name": "samarth-surveyos",
+  "name": "survey-app",
   "private": true,
   "workspaces": [
     "frontend",
@@ -28,7 +28,8 @@
     "start": "npm run start -w backend"
   },
   "devDependencies": {
-    "concurrently": "^9.2.1"
+    "concurrently": "^9.2.1",
+    "cypress": "^15.16.0"
   },
   "engines": {
     "node": ">=20.19.0"

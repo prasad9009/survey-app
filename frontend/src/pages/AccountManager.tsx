@@ -23,12 +23,12 @@ import {
 import { useQueryClient } from '@tanstack/react-query'
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Navigate, useLocation, useParams, useSearchParams, type NavigateFunction } from 'react-router-dom'
-import { AccountManagerSidebarBlock } from './AccountManagerSidebarBlock'
-import { ConfirmAlert } from './ConfirmAlert'
-import { AppSelect } from './components/AppSelect'
-import { CollaborationBrandMark } from './CollaborationBrandMark'
-import { LayoutFooter } from './LayoutFooter'
-import { type AccountRow, type LedgerTransaction } from './accountManagersData'
+import { AccountManagerSidebarBlock } from '../AccountManagerSidebarBlock'
+import { ConfirmAlert } from '../ConfirmAlert'
+import { AppSelect } from '../components/AppSelect'
+import { CollaborationBrandMark } from '../CollaborationBrandMark'
+import { LayoutFooter } from '../LayoutFooter'
+import { type AccountRow, type LedgerTransaction } from '../accountManagersData'
 import {
   CardPanel,
   CardShell,
@@ -37,20 +37,22 @@ import {
   toolbarPrimaryButtonClass,
   toolbarSearchInputClass,
   toolbarSecondaryButtonClass,
-} from './dashboardCards'
-import { layoutBrandLogo } from './brandLogo'
-import { HeaderAdminBadge } from './components/HeaderAdminBadge'
-import { HeaderYearSelect } from './components/HeaderYearSelect'
-import { BackgroundRefreshIndicator } from './components/BackgroundRefreshIndicator'
-import { PageRefreshButton } from './components/PageRefreshButton'
-import { useAccountManager, useInstrumentCoworkers } from './hooks/queries'
-import { invalidateAfterTransactionChange } from './lib/invalidate'
+} from '../dashboardCards'
+import { layoutBrandLogo } from '../brandLogo'
+import { HeaderAdminBadge } from '../components/HeaderAdminBadge'
+import { HeaderYearSelect } from '../components/HeaderYearSelect'
+import { BackgroundRefreshIndicator } from '../components/BackgroundRefreshIndicator'
+import { PageRefreshButton } from '../components/PageRefreshButton'
+import { useAsyncLock } from '../hooks/useAsyncLock'
+import { useAccountManager, useInstrumentCoworkers } from '../hooks/queries'
+import { invalidateAfterTransactionChange } from '../lib/invalidate'
 import { toast } from 'sonner'
-import http from './api/http'
-import { signOut } from './signOut'
-import { useAuth } from './context/AuthContext'
-import { useSelectedYear } from './context/SelectedYearContext'
-import { resolveLedgerReportHeaderContacts } from './utils/pdfAdminContacts'
+import http from '../services/http'
+import { signOut } from '../signOut'
+import { runExport } from '../utils/runExport'
+import { resolveLedgerReportHeaderContacts } from '../utils/pdfAdminContacts'
+import { useAuth } from '../context/AuthContext'
+import { useSelectedYear } from '../context/SelectedYearContext'
 
 type NavItem = {
   label: string
@@ -111,7 +113,8 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
   const queryClient = useQueryClient()
   const { user, company, managers, activeInstrumentId, companyAdmins, isLoading: authLoading } = useAuth()
   const { coworkers: instrumentCoworkers } = useInstrumentCoworkers()
-  const [isExporting, setIsExporting] = useState(false)
+  const exportLock = useAsyncLock()
+  const txSubmitLock = useAsyncLock()
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const { managerId: managerIdFromRoute } = useParams<{ managerId: string }>()
   const [searchParams] = useSearchParams()
@@ -821,61 +824,53 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
                       />
                       <button
                         type="button"
-                        disabled={isLedgerLoading || isExporting}
+                        disabled={isLedgerLoading || exportLock.locked}
                         className={toolbarSecondaryButtonClass}
                         aria-label="Export filtered transactions as PDF"
                         title="Download PDF of transactions shown for the selected year"
-                        onClick={async () => {
-                          if (isExporting) return
-                          setIsExporting(true)
-                          const toastId = toast.loading('Preparing PDF…')
-                          try {
-                            const { exportAccountManagerReportPdf } = await import('./exportTransactionsPdf')
-                            const exportRows = [...filteredTableTransactions].sort((a, b) =>
-                              b.date.localeCompare(a.date),
-                            )
-                            const debit = exportRows
-                              .filter((t) => t.type === 'debit')
-                              .reduce((sum, t) => sum + t.amount, 0)
-                            const credit = exportRows
-                              .filter((t) => t.type === 'credit')
-                              .reduce((sum, t) => sum + t.amount, 0)
-                            const { admin, coworker } = resolveLedgerReportHeaderContacts({
-                              user,
-                              companyAdmins,
-                              activeInstrumentId,
-                              ledgerAdminId: ledgerMeta?.adminId,
-                              instrumentCoworkers: instrumentCoworkers.map((c) => ({
-                                adminId: c.adminId,
-                                fullName: c.fullName,
-                                phone: c.phone,
-                              })),
+                        onClick={() => {
+                          void exportLock.run(async () => {
+                            await runExport('account manager PDF', async () => {
+                              const { exportAccountManagerReportPdf } = await import('../exportTransactionsPdf')
+                              const exportRows = [...filteredTableTransactions].sort((a, b) =>
+                                b.date.localeCompare(a.date),
+                              )
+                              const debit = exportRows
+                                .filter((t) => t.type === 'debit')
+                                .reduce((sum, t) => sum + t.amount, 0)
+                              const credit = exportRows
+                                .filter((t) => t.type === 'credit')
+                                .reduce((sum, t) => sum + t.amount, 0)
+                              const { admin, coworker } = resolveLedgerReportHeaderContacts({
+                                user,
+                                companyAdmins,
+                                activeInstrumentId,
+                                ledgerAdminId: ledgerMeta?.adminId,
+                                instrumentCoworkers: instrumentCoworkers.map((c) => ({
+                                  adminId: c.adminId,
+                                  fullName: c.fullName,
+                                  phone: c.phone,
+                                })),
+                              })
+                              await exportAccountManagerReportPdf({
+                                accountManagerName: manager.name,
+                                companyName: company?.name,
+                                adminName: admin.fullName || company?.name || 'Admin',
+                                adminPhone: admin.phone,
+                                coworkerName: coworker?.fullName,
+                                coworkerPhone: coworker?.phone,
+                                year: selectedYear,
+                                transactions: exportRows,
+                                totalDebit: debit,
+                                totalCredit: credit,
+                                netBalance: credit - debit,
+                                pendingAmount: totalPending,
+                              })
                             })
-                            await exportAccountManagerReportPdf({
-                              accountManagerName: manager.name,
-                              companyName: company?.name,
-                              adminName: admin.fullName || company?.name || 'Admin',
-                              adminPhone: admin.phone,
-                              coworkerName: coworker?.fullName,
-                              coworkerPhone: coworker?.phone,
-                              year: selectedYear,
-                              transactions: exportRows,
-                              totalDebit: debit,
-                              totalCredit: credit,
-                              netBalance: credit - debit,
-                              pendingAmount: totalPending,
-                            })
-                            toast.success('Report downloaded', { id: toastId })
-                          } catch {
-                            toast.error('Could not export PDF. Try again or use Share if prompted.', {
-                              id: toastId,
-                            })
-                          } finally {
-                            setIsExporting(false)
-                          }
+                          })
                         }}
                       >
-                        {isExporting ? 'Exporting…' : 'Export'}
+                        {exportLock.locked ? 'Exporting…' : 'Export'}
                       </button>
                       {canEditLedgerActions ? (
                         <button
@@ -926,8 +921,9 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
 
                   <form
                     className="mt-4 grid min-w-0 grid-cols-1 gap-3"
-                    onSubmit={async (event) => {
+                    onSubmit={(event) => {
                       event.preventDefault()
+                      void txSubmitLock.run(async () => {
                       if (!managerIdFromRoute) return
 
                       const trimmedReason = (draftTx.reason ?? '').trim()
@@ -990,6 +986,7 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
                       } catch {
                         toast.error('Could not save transaction')
                       }
+                      })
                     }}
                   >
                     <div className="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-2 md:gap-3">
@@ -1097,9 +1094,10 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
                       </button>
                       <button
                         type="submit"
-                        className="h-11 rounded-xl bg-[#f39b03] px-5 text-sm font-extrabold text-white shadow-sm transition hover:bg-[#e18e03]"
+                        disabled={txSubmitLock.locked}
+                        className="h-11 rounded-xl bg-[#f39b03] px-5 text-sm font-extrabold text-white shadow-sm transition hover:bg-[#e18e03] disabled:cursor-not-allowed disabled:opacity-60"
                       >
-                        Save
+                        {txSubmitLock.locked ? 'Saving…' : 'Save'}
                       </button>
                     </div>
                   </form>

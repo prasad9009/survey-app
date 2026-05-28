@@ -8,7 +8,7 @@ import {
   type ReactNode,
 } from 'react'
 import axios from 'axios'
-import http, { tokenStorage } from '../api/http'
+import http, { tokenStorage } from '../services/http'
 import { clearSurveyQueryCache } from '../components/QueryProvider'
 import { queryClient } from '../lib/queryClient'
 import { prefetchAfterLogin } from '../lib/prefetch'

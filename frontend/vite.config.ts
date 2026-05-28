@@ -5,7 +5,7 @@ import { VitePWA } from 'vite-plugin-pwa'
 
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => {
-  /** Where Vite forwards `/api/*` in dev. Must match a running Express API (see `npm run server`). */
+  /** Where Vite forwards `/api/*` in dev. Must match a running Express API (see `npm start` in backend). */
   const fileEnv = loadEnv(mode, process.cwd(), '')
   const apiProxyTarget = fileEnv.VITE_API_PROXY_TARGET || 'http://localhost:4000'
   const buildVersion =

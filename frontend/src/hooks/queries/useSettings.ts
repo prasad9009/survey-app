@@ -1,5 +1,5 @@
 import { useQueries } from '@tanstack/react-query'
-import { fetchSettingsCompany, fetchSettingsMe } from '../../api/surveyQueries'
+import { fetchSettingsCompany, fetchSettingsMe } from '../../services/surveyQueries'
 import { queryKeys } from '../../lib/queryKeys'
 import { STALE_TIMES } from '../../lib/staleTimes'
 import { useAuth } from '../../context/AuthContext'

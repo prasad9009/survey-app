@@ -3,7 +3,7 @@ import {
   fetchAccountManagerAccounts,
   fetchAccountManagerClientSites,
   fetchAccountManagerTransactions,
-} from '../../api/surveyQueries'
+} from '../../services/surveyQueries'
 import { queryKeys } from '../../lib/queryKeys'
 import { STALE_TIMES } from '../../lib/staleTimes'
 import { useAuth } from '../../context/AuthContext'

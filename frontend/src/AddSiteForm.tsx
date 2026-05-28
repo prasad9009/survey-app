@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useAsyncLock } from './hooks/useAsyncLock'
 
 export const DEFAULT_CLIENT_OPTIONS_FOR_ADD_SITE = [
   'Amit Developers',
@@ -36,7 +37,7 @@ export function AddSiteForm({
   const isEdit = mode === 'edit'
   const [siteName, setSiteName] = useState(editingSite?.name ?? '')
   const [locationName, setLocationName] = useState(editingSite?.location ?? '')
-  const [isSaving, setIsSaving] = useState(false)
+  const saveLock = useAsyncLock()
 
   useEffect(() => {
     if (!isEdit || !editingSite) return
@@ -67,19 +68,15 @@ export function AddSiteForm({
   return (
     <form
       className={gridClass}
-      onSubmit={async (event) => {
+      onSubmit={(event) => {
         event.preventDefault()
-        if (isSaving) return
-        setIsSaving(true)
-        try {
+        void saveLock.run(async () => {
           if (saveSite) {
             await saveSite(siteName.trim(), locationName.trim())
           }
           if (!isEdit) resetFields()
           onSuccess()
-        } finally {
-          setIsSaving(false)
-        }
+        })
       }}
     >
       <label className={['grid gap-2', colSpanWide].join(' ')}>
@@ -123,10 +120,10 @@ export function AddSiteForm({
         </button>
         <button
           type="submit"
-          disabled={isSaving}
+          disabled={saveLock.locked}
           className="inline-flex h-11 min-w-[120px] flex-1 items-center justify-center rounded-xl bg-[#f39b03] px-8 text-sm font-extrabold text-white transition hover:bg-[#e18e03] enabled:cursor-pointer disabled:opacity-60 sm:flex-none"
         >
-          {isSaving ? 'Saving…' : isEdit ? 'Save Changes' : 'Save Site'}
+          {saveLock.locked ? 'Saving…' : isEdit ? 'Save Changes' : 'Save Site'}
         </button>
       </div>
     </form>

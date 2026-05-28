@@ -14,8 +14,8 @@ import {
 import { useState } from 'react'
 import { Link, Navigate, useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
-import { useAuth } from './context/AuthContext'
-import { layoutBrandLogo } from './brandLogo'
+import { useAuth } from '../context/AuthContext'
+import { layoutBrandLogo } from '../brandLogo'
 
 const features = [
   { icon: Users, title: 'Client & Site', subtitle: 'Management' },

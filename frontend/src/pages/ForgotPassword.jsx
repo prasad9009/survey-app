@@ -3,16 +3,16 @@ import { useState } from 'react'
 import { Link, Navigate, useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import axios from 'axios'
-import http from './api/http'
+import http from '../services/http'
 import {
   RESET_EMAIL_KEY,
   RESET_STEP_AWAIT_OTP,
   RESET_STEP_KEY,
   authResetHttpConfig,
   clearAuthResetFlow,
-} from './authResetFlow'
-import { AuthShell } from './components/AuthShell'
-import { useAuth } from './context/AuthContext'
+} from '../authResetFlow'
+import { AuthShell } from '../components/AuthShell'
+import { useAuth } from '../context/AuthContext'
 
 function readPendingSentEmail() {
   try {

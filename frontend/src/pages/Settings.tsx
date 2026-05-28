@@ -16,21 +16,22 @@ import {
 import { Fragment, useCallback, useEffect, useState, type ReactNode } from 'react'
 import { useLocation } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
-import http from './api/http'
-import { useSettings } from './hooks/queries'
-import { invalidateAfterSettingsChange } from './lib/invalidate'
-import { AccountManagerSidebarBlock } from './AccountManagerSidebarBlock'
-import { CollaborationBrandMark } from './CollaborationBrandMark'
-import { LayoutFooter } from './LayoutFooter'
-import { CardShell } from './dashboardCards'
-import { HeaderAdminBadge } from './components/HeaderAdminBadge'
-import { HeaderYearSelect } from './components/HeaderYearSelect'
-import { PageRefreshButton } from './components/PageRefreshButton'
-import { BackgroundRefreshIndicator } from './components/BackgroundRefreshIndicator'
-import { useAuth } from './context/AuthContext'
-import { getApiErrorMessage } from './api/request'
-import { signOut } from './signOut'
-import { notify } from './utils/notify'
+import http from '../services/http'
+import { useAsyncLock } from '../hooks/useAsyncLock'
+import { useSettings } from '../hooks/queries'
+import { invalidateAfterSettingsChange } from '../lib/invalidate'
+import { AccountManagerSidebarBlock } from '../AccountManagerSidebarBlock'
+import { CollaborationBrandMark } from '../CollaborationBrandMark'
+import { LayoutFooter } from '../LayoutFooter'
+import { CardShell } from '../dashboardCards'
+import { HeaderAdminBadge } from '../components/HeaderAdminBadge'
+import { HeaderYearSelect } from '../components/HeaderYearSelect'
+import { PageRefreshButton } from '../components/PageRefreshButton'
+import { BackgroundRefreshIndicator } from '../components/BackgroundRefreshIndicator'
+import { useAuth } from '../context/AuthContext'
+import { getApiErrorMessage } from '../services/request'
+import { signOut } from '../signOut'
+import { notify } from '../utils/notify'
 
 type NavItem = {
   label: string
@@ -68,7 +69,7 @@ export default function Settings({ onNavigate }: SettingsProps) {
   const displayName = user?.fullName?.trim() || user?.email || 'User'
 
   const [pageLoading, setPageLoading] = useState(true)
-  const [saveBusy, setSaveBusy] = useState(false)
+  const saveLock = useAsyncLock()
 
   // Admin profile
   const [adminFullName, setAdminFullName] = useState('')
@@ -79,7 +80,7 @@ export default function Settings({ onNavigate }: SettingsProps) {
   const [currentPassword, setCurrentPassword] = useState('')
   const [changePassword, setChangePassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
-  const [passwordBusy, setPasswordBusy] = useState(false)
+  const passwordLock = useAsyncLock()
 
   const [bdAccountName, setBdAccountName] = useState('')
   const [bdAccountNumber, setBdAccountNumber] = useState('')
@@ -186,59 +187,57 @@ export default function Settings({ onNavigate }: SettingsProps) {
       notify.error('New password must be at least 8 characters.')
       return
     }
-    setPasswordBusy(true)
-    const toastId = notify.loading('Updating password…')
-    try {
-      await http.post('/api/auth/change-password', {
-        currentPassword,
-        newPassword: changePassword,
-      })
-      notify.dismiss(toastId)
-      notify.success('Password updated successfully.')
-      setCurrentPassword('')
-      setChangePassword('')
-      setConfirmPassword('')
-    } catch (err) {
-      notify.dismiss(toastId)
-      const msg = getApiErrorMessage(err, 'Could not update password.')
-      notify.error(/current password is incorrect/i.test(msg) ? 'Current password is incorrect' : msg)
-    } finally {
-      setPasswordBusy(false)
-    }
+    void passwordLock.run(async () => {
+      const toastId = notify.loading('Updating password…')
+      try {
+        await http.post('/api/auth/change-password', {
+          currentPassword,
+          newPassword: changePassword,
+        })
+        notify.dismiss(toastId)
+        notify.success('Password updated successfully.')
+        setCurrentPassword('')
+        setChangePassword('')
+        setConfirmPassword('')
+      } catch (err) {
+        notify.dismiss(toastId)
+        const msg = getApiErrorMessage(err, 'Could not update password.')
+        notify.error(/current password is incorrect/i.test(msg) ? 'Current password is incorrect' : msg)
+      }
+    })
   }
 
   const handleCancel = () => {
     applySettingsFromCache()
   }
 
-  const handleSaveSettings = async () => {
-    setSaveBusy(true)
-    const toastId = notify.loading('Saving settings…')
-    try {
-      await http.patch('/api/settings/me', {
-        profile: {
-          fullName: adminFullName.trim(),
-          phone: adminPhone.trim(),
-        },
-        bankDetails: {
-          accountName: bdAccountName.trim(),
-          accountNumber: bdAccountNumber.trim(),
-          ifscCode: bdIfsc.trim(),
-          bankName: bdBankName.trim(),
-          branch: bdBranch.trim(),
-          upiPhone: bdUpiPhone.trim(),
-        },
-      })
-      notify.dismiss(toastId)
-      notify.success('Settings saved successfully.')
-      reloadSettings()
-      await refreshSession()
-    } catch (err) {
-      notify.dismiss(toastId)
-      notify.apiError(err, 'Could not save settings.')
-    } finally {
-      setSaveBusy(false)
-    }
+  const handleSaveSettings = () => {
+    void saveLock.run(async () => {
+      const toastId = notify.loading('Saving settings…')
+      try {
+        await http.patch('/api/settings/me', {
+          profile: {
+            fullName: adminFullName.trim(),
+            phone: adminPhone.trim(),
+          },
+          bankDetails: {
+            accountName: bdAccountName.trim(),
+            accountNumber: bdAccountNumber.trim(),
+            ifscCode: bdIfsc.trim(),
+            bankName: bdBankName.trim(),
+            branch: bdBranch.trim(),
+            upiPhone: bdUpiPhone.trim(),
+          },
+        })
+        notify.dismiss(toastId)
+        notify.success('Settings saved successfully.')
+        reloadSettings()
+        await refreshSession()
+      } catch (err) {
+        notify.dismiss(toastId)
+        notify.apiError(err, 'Could not save settings.')
+      }
+    })
   }
 
   return (
@@ -564,10 +563,10 @@ export default function Settings({ onNavigate }: SettingsProps) {
                           <button
                             type="button"
                             onClick={() => void handleUpdatePassword()}
-                            disabled={passwordBusy}
+                            disabled={passwordLock.locked}
                             className="h-11 w-full rounded-xl border border-neutral-200 bg-white px-6 text-sm font-extrabold text-neutral-900 shadow-sm ring-1 ring-black/5 transition hover:border-[#f39b03]/40 hover:text-[#f39b03] disabled:cursor-not-allowed disabled:opacity-60"
                           >
-                            {passwordBusy ? 'Updating…' : 'Update password'}
+                            {passwordLock.locked ? 'Updating…' : 'Update password'}
                           </button>
                         </div>
 
@@ -650,10 +649,10 @@ export default function Settings({ onNavigate }: SettingsProps) {
                 <button
                   type="button"
                   onClick={handleSaveSettings}
-                  disabled={saveBusy}
+                  disabled={saveLock.locked}
                   className="inline-flex h-11 items-center justify-center rounded-xl bg-[#f39b03] px-8 text-sm font-extrabold text-white transition hover:bg-[#e18e03] disabled:opacity-60"
                 >
-                  {saveBusy ? 'Saving…' : 'Save Settings'}
+                  {saveLock.locked ? 'Saving…' : 'Save Settings'}
                 </button>
               </div>
                 </>

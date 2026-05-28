@@ -1,7 +1,7 @@
-﻿import { useEffect, useMemo, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { X } from 'lucide-react'
 import { toast } from 'sonner'
-import http from '../api/http'
+import http from '../services/http'
 import { AppSelect } from './AppSelect'
 import type { InvoicePdfBillingLine } from '../exportInvoicePdf'
 import { validateSiteVisitForm } from '../utils/validateSiteVisit'
@@ -74,11 +74,12 @@ export function EditSiteVisitModal({ open, initial, onClose, onSaved }: EditSite
   const [dwgNo, setDwgNo] = useState('')
   const [machine, setMachine] = useState('Total Station')
   const [notes, setNotes] = useState('')
-  const [paymentMode, setPaymentMode] = useState('—')
+  const [paymentMode, setPaymentMode] = useState('�')
   const [paymentStatus, setPaymentStatus] = useState('pending')
   const [billingLines, setBillingLines] = useState<BillingLineDraft[]>(() => billingLinesToDraft())
   const [billingOtherCharges, setBillingOtherCharges] = useState('0')
   const [saving, setSaving] = useState(false)
+  const savingRef = useRef(false)
 
   useEffect(() => {
     if (!open || !initial) return
@@ -88,7 +89,7 @@ export function EditSiteVisitModal({ open, initial, onClose, onSaved }: EditSite
     setDwgNo(initial.dwgNo ?? '')
     setMachine(initial.machine ?? 'Total Station')
     setNotes(initial.notes ?? '')
-    setPaymentMode(initial.paymentMode ?? '—')
+    setPaymentMode(initial.paymentMode ?? '�')
     const status = (initial.paymentStatus ?? 'pending').toLowerCase()
     setPaymentStatus(status === 'paid' || status === 'partial' || status === 'waived' ? status : 'pending')
     setBillingLines(billingLinesToDraft(initial.billingLines))
@@ -109,11 +110,12 @@ export function EditSiteVisitModal({ open, initial, onClose, onSaved }: EditSite
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
-    if (saving) return
+    if (savingRef.current) return
     const validationError = validateSiteVisitForm({
       client: 'x', site: 'x', siteAddress: 'x', machine, billingLines, billingOtherCharges, amountRupees,
     })
     if (validationError) { toast.error(validationError); return }
+    savingRef.current = true
     setSaving(true)
     try {
       const res = await http.put<{ ok: boolean; error?: string }>(`/api/site-visits/${initial.visitMongoId}`, {
@@ -133,7 +135,10 @@ export function EditSiteVisitModal({ open, initial, onClose, onSaved }: EditSite
       toast.success('Site visit updated')
       onSaved()
       onClose()
-    } catch { toast.error('Could not update visit') } finally { setSaving(false) }
+    } catch { toast.error('Could not update visit') } finally {
+      savingRef.current = false
+      setSaving(false)
+    }
   }
 
 
@@ -173,7 +178,7 @@ export function EditSiteVisitModal({ open, initial, onClose, onSaved }: EditSite
           </div>
           <div className="flex justify-end gap-2 border-t border-neutral-100 px-4 py-3">
             <button type="button" onClick={onClose} className="h-11 rounded-xl border border-neutral-200 bg-white px-4 text-sm font-extrabold text-neutral-700">Cancel</button>
-            <button type="submit" disabled={saving} className="h-11 rounded-xl bg-[#f39b03] px-5 text-sm font-extrabold text-white disabled:opacity-60">{saving ? 'Saving…' : 'Save changes'}</button>
+            <button type="submit" disabled={saving} className="h-11 rounded-xl bg-[#f39b03] px-5 text-sm font-extrabold text-white disabled:opacity-60">{saving ? 'Saving�' : 'Save changes'}</button>
           </div>
         </form>
       </div>

@@ -1,10 +1,17 @@
 # Dependencies
+frontend/node_modules/
+backend/node_modules/
 node_modules/
 
 # Builds
+frontend/dist/
 dist/
 dist-ssr/
 *.local
+
+# Backend uploads (user-generated files)
+backend/uploads/*
+!backend/uploads/.gitkeep
 
 # Environment (never commit secrets)
 .env

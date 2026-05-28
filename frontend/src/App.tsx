@@ -11,21 +11,21 @@ import {
 import InstallPrompt from './components/InstallPrompt.jsx'
 import { useAuth } from './context/AuthContext'
 
-const Login = lazy(() => import('./Login.jsx'))
-const ForgotPassword = lazy(() => import('./ForgotPassword.jsx'))
-const VerifyOtp = lazy(() => import('./VerifyOtp.jsx'))
-const ResetPassword = lazy(() => import('./ResetPassword.jsx'))
+const Login = lazy(() => import('./pages/Login.jsx'))
+const ForgotPassword = lazy(() => import('./pages/ForgotPassword.jsx'))
+const VerifyOtp = lazy(() => import('./pages/VerifyOtp.jsx'))
+const ResetPassword = lazy(() => import('./pages/ResetPassword.jsx'))
 
-const Dashboard = lazy(() => import('./Dashboard'))
-const Invoice = lazy(() => import('./Invoice'))
-const AccountManager = lazy(() => import('./AccountManager'))
-const AccountManagerSelect = lazy(() => import('./AccountManagerSelect'))
-const ClientsSites = lazy(() => import('./ClientsSites'))
-const AddSite = lazy(() => import('./AddSite'))
-const AddSiteVisit = lazy(() => import('./AddSiteVisit'))
-const SiteDetails = lazy(() => import('./SiteDetails').then((m) => ({ default: m.SiteDetails })))
-const Reports = lazy(() => import('./Reports'))
-const Settings = lazy(() => import('./Settings'))
+const Dashboard = lazy(() => import('./pages/Dashboard'))
+const Invoice = lazy(() => import('./pages/Invoice'))
+const AccountManager = lazy(() => import('./pages/AccountManager'))
+const AccountManagerSelect = lazy(() => import('./pages/AccountManagerSelect'))
+const ClientsSites = lazy(() => import('./pages/ClientsSites'))
+const AddSite = lazy(() => import('./pages/AddSite'))
+const AddSiteVisit = lazy(() => import('./pages/AddSiteVisit'))
+const SiteDetails = lazy(() => import('./pages/SiteDetails').then((m) => ({ default: m.SiteDetails })))
+const Reports = lazy(() => import('./pages/Reports'))
+const Settings = lazy(() => import('./pages/Settings'))
 
 const PUBLIC_PATHS = new Set(['/login', '/forgot-password', '/verify-reset-otp', '/reset-password'])
 

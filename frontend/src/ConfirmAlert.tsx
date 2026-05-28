@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react'
 import { AlertTriangle, Info, X } from 'lucide-react'
 
 export type ConfirmAlertProps = {
@@ -29,9 +30,25 @@ export function ConfirmAlert({
   onConfirm,
   onCancel,
 }: ConfirmAlertProps) {
+  const confirmFiredRef = useRef(false)
+
+  useEffect(() => {
+    if (!open) confirmFiredRef.current = false
+  }, [open])
+
+  useEffect(() => {
+    if (!confirmBusy) confirmFiredRef.current = false
+  }, [confirmBusy])
+
   if (!open) return null
 
   const isDanger = variant === 'danger'
+
+  const handleConfirmClick = () => {
+    if (confirmBusy || confirmFiredRef.current) return
+    confirmFiredRef.current = true
+    onConfirm()
+  }
 
   return (
     <div
@@ -98,7 +115,7 @@ export function ConfirmAlert({
           <button
             type="button"
             disabled={confirmBusy}
-            onClick={onConfirm}
+            onClick={handleConfirmClick}
             className={[
               'h-11 rounded-xl px-4 text-sm font-extrabold text-white shadow-sm transition disabled:cursor-not-allowed disabled:opacity-60 sm:min-w-[6.5rem]',
               isDanger ? 'bg-rose-600 hover:bg-rose-700' : 'bg-[#f39b03] hover:bg-[#e18e03]',

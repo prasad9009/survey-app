@@ -1,8 +1,15 @@
 import { toast } from 'sonner'
-import { getApiErrorMessage } from '../api/request'
+import { getApiErrorMessage } from '../services/request'
 
-/** Run an export with loading + success/error toasts. */
+let exportInFlight = false
+
+/** Run an export with loading + success/error toasts. Only one export at a time. */
 export async function runExport(label: string, fn: () => Promise<void>): Promise<boolean> {
+  if (exportInFlight) {
+    toast.info('Please wait — an export is already in progress.')
+    return false
+  }
+  exportInFlight = true
   const id = toast.loading(`Exporting ${label}…`)
   try {
     await fn()
@@ -11,5 +18,7 @@ export async function runExport(label: string, fn: () => Promise<void>): Promise
   } catch (err) {
     toast.error(getApiErrorMessage(err, `Could not export ${label}.`), { id })
     return false
+  } finally {
+    exportInFlight = false
   }
 }

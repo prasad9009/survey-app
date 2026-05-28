@@ -1,4 +1,4 @@
-import http from './api/http'
+import http from './services/http'
 import type { InvoicePdfBankColumns } from './exportInvoicePdf'
 
 export async function fetchInvoiceBankColumns(

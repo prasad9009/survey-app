@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import axios from 'axios'
-import http from './api/http'
+import http from '../services/http'
 import {
   RESET_EMAIL_KEY,
   RESET_STEP_AWAIT_OTP,
@@ -11,9 +11,9 @@ import {
   RESET_STEP_SET_PASSWORD,
   authResetHttpConfig,
   clearAuthResetFlow,
-} from './authResetFlow'
-import { AuthShell } from './components/AuthShell'
-import { useAuth } from './context/AuthContext'
+} from '../authResetFlow'
+import { AuthShell } from '../components/AuthShell'
+import { useAuth } from '../context/AuthContext'
 
 export default function VerifyOtp() {
   const navigate = useNavigate()

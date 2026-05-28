@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { fetchSites } from '../../api/surveyQueries'
+import { fetchSites } from '../../services/surveyQueries'
 import { queryKeys } from '../../lib/queryKeys'
 import { STALE_TIMES } from '../../lib/staleTimes'
 import { useQueryScope } from '../useScopeQuery'

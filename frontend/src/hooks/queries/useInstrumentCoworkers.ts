@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { fetchInstrumentCoworkers, type InstrumentCoworkerDto } from '../../api/surveyQueries'
+import { fetchInstrumentCoworkers, type InstrumentCoworkerDto } from '../../services/surveyQueries'
 import { queryKeys } from '../../lib/queryKeys'
 import { STALE_TIMES } from '../../lib/staleTimes'
 import { useAuth } from '../../context/AuthContext'

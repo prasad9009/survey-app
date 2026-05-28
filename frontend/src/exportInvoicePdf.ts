@@ -32,6 +32,8 @@ export type InvoicePdfData = {
   extraCharges: number
   discount: number
   invoiceDate: string
+  /** When set, used on the PDF instead of auto-generated from visitId */
+  invoiceNumber?: string
   /** When set (e.g. SV-4006), invoice number becomes INV-4006 instead of random */
   visitId?: string
   /** Shown after "Status:" — affects colour (Paid = green, otherwise red) */
@@ -69,7 +71,7 @@ async function loadInvoicePdfLogoDataUrl(): Promise<string> {
   return loadImageAsDataUrl(src)
 }
 
-function buildInvoiceNumber(visitId?: string) {
+export function buildInvoiceNumber(visitId?: string) {
   if (!visitId || visitId === '-') {
     return `INV-${String(Math.floor(1000 + Math.random() * 9000))}`
   }
@@ -144,6 +146,8 @@ function drawInvoiceHeader(
     title: string
     invoiceNo: string
     invoiceDate: string
+    /** When false, invoice date is omitted from the header (shown in Bill To instead). */
+    showInvoiceDateInHeader?: boolean
     paymentStatus?: string
     companyName: string
     officeAddress: string
@@ -200,7 +204,10 @@ function drawInvoiceHeader(
   doc.setTextColor(35, 35, 35)
   doc.setFontSize(9.5)
   doc.text(`Invoice No: ${opts.invoiceNo}`, right, logoTop + 4, { align: 'right' })
-  doc.text(`Invoice Date: ${opts.invoiceDate}`, right, logoTop + 10, { align: 'right' })
+  const showDateInHeader = opts.showInvoiceDateInHeader !== false
+  if (showDateInHeader) {
+    doc.text(`Invoice Date: ${opts.invoiceDate}`, right, logoTop + 10, { align: 'right' })
+  }
 
   const { label: statusLabel, paid } = statusFromPayment(opts.paymentStatus)
   const statusText = `Status: ${statusLabel}`
@@ -211,7 +218,7 @@ function drawInvoiceHeader(
   const badgeX = right - badgeW
   const minRuleY = logoTop + logoSize + 4
   const ruleY = Math.max(minRuleY, y + 3)
-  const badgeY = Math.min(logoTop + 11.2, ruleY - badgeH - 1)
+  const badgeY = Math.min(showDateInHeader ? logoTop + 11.2 : logoTop + 10, ruleY - badgeH - 1)
 
   if (paid) {
     doc.setFillColor(230, 248, 230)
@@ -435,7 +442,8 @@ export async function exportInvoicePdf(data: InvoicePdfData) {
   }
 
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
-  const invoiceNo = buildInvoiceNumber(data.visitId)
+  const invoiceNo = (data.invoiceNumber ?? '').trim() || buildInvoiceNumber(data.visitId)
+  const invoiceDate = (data.invoiceDate ?? '').trim() || todayInvoiceDate()
   const pageWidth = doc.internal.pageSize.getWidth()
   const pageHeight = doc.internal.pageSize.getHeight()
   const left = 14
@@ -447,7 +455,8 @@ export async function exportInvoicePdf(data: InvoicePdfData) {
   const headerRuleY = drawInvoiceHeader(doc, logoDataUrl, {
     title: 'INVOICE',
     invoiceNo,
-    invoiceDate: todayInvoiceDate(),
+    invoiceDate,
+    showInvoiceDateInHeader: false,
     paymentStatus: data.paymentStatus,
     ...co,
   })
@@ -462,8 +471,9 @@ export async function exportInvoicePdf(data: InvoicePdfData) {
   doc.setTextColor(55, 55, 55)
   doc.text(`Client Name : ${data.client || '—'}`, left, billTop + 6)
   doc.text(`Site Name : ${data.site || '—'}`, left, billTop + 12)
+  doc.text(`Invoice Date : ${invoiceDate}`, left, billTop + 18)
 
-  const tableStartY = billTop + 18
+  const tableStartY = billTop + 24
 
   const bodyRows = lineItems.length ? lineItems : [['1', '—', '—', formatInr(0), formatInr(0)]]
   autoTable(doc, {

@@ -1,4 +1,4 @@
-import http from './api/http'
+import http from './services/http'
 
 export type InvoicePdfCompanyHeader = {
   companyName: string

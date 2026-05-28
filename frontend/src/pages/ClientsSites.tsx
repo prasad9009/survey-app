@@ -30,29 +30,30 @@ import {
   toolbarPrimaryButtonClass,
   toolbarSearchInputClass,
   toolbarSecondaryButtonClass,
-} from './dashboardCards'
-import { AccountManagerSidebarBlock } from './AccountManagerSidebarBlock'
-import { AddSiteForm } from './AddSiteForm'
-import { HeaderAdminBadge } from './components/HeaderAdminBadge'
-import { HeaderYearSelect } from './components/HeaderYearSelect'
-import { BackgroundRefreshIndicator } from './components/BackgroundRefreshIndicator'
-import { PageRefreshButton } from './components/PageRefreshButton'
-import { useClientsAndSites, useInstrumentCoworkers } from './hooks/queries'
-import { invalidateAfterClientChange, invalidateAfterSiteChange } from './lib/invalidate'
-import { CollaborationBrandMark } from './CollaborationBrandMark'
-import { LayoutFooter } from './LayoutFooter'
-import { useSelectedYear } from './context/SelectedYearContext'
+} from '../dashboardCards'
+import { AccountManagerSidebarBlock } from '../AccountManagerSidebarBlock'
+import { AddSiteForm } from '../AddSiteForm'
+import { HeaderAdminBadge } from '../components/HeaderAdminBadge'
+import { HeaderYearSelect } from '../components/HeaderYearSelect'
+import { BackgroundRefreshIndicator } from '../components/BackgroundRefreshIndicator'
+import { PageRefreshButton } from '../components/PageRefreshButton'
+import { useAsyncLock } from '../hooks/useAsyncLock'
+import { useClientsAndSites, useInstrumentCoworkers } from '../hooks/queries'
+import { invalidateAfterClientChange, invalidateAfterSiteChange } from '../lib/invalidate'
+import { CollaborationBrandMark } from '../CollaborationBrandMark'
+import { LayoutFooter } from '../LayoutFooter'
+import { useSelectedYear } from '../context/SelectedYearContext'
 import axios from 'axios'
 import { toast } from 'sonner'
-import http from './api/http'
-import { useAuth } from './context/AuthContext'
-import { signOut } from './signOut'
-import { ConfirmAlert } from './ConfirmAlert'
-import { AppSelect } from './components/AppSelect'
-import { TablePagination } from './components/TablePagination'
-import { lazyExportAllClientsPdf, lazyExportClientPdf } from './utils/lazyPdf'
-import { runExport } from './utils/runExport'
-import { resolveLedgerReportHeaderContacts } from './utils/pdfAdminContacts'
+import http from '../services/http'
+import { useAuth } from '../context/AuthContext'
+import { signOut } from '../signOut'
+import { ConfirmAlert } from '../ConfirmAlert'
+import { AppSelect } from '../components/AppSelect'
+import { TablePagination } from '../components/TablePagination'
+import { lazyExportAllClientsPdf, lazyExportClientPdf } from '../utils/lazyPdf'
+import { runExport } from '../utils/runExport'
+import { resolveLedgerReportHeaderContacts } from '../utils/pdfAdminContacts'
 
 const CLIENT_PAGE_SIZE = 10
 
@@ -131,7 +132,8 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
   const [editClientName, setEditClientName] = useState('')
   const [editClientPhone, setEditClientPhone] = useState('')
   const [editClientError, setEditClientError] = useState('')
-  const [editClientBusy, setEditClientBusy] = useState(false)
+  const createClientLock = useAsyncLock()
+  const updateClientLock = useAsyncLock()
   const [isAddSiteModalOpen, setIsAddSiteModalOpen] = useState(false)
   const [editingSite, setEditingSite] = useState<{ site: SiteRow; clientName: string } | null>(null)
   const [sitesSearchQuery, setSitesSearchQuery] = useState('')
@@ -147,7 +149,7 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
   )
   const [deleteSiteBusy, setDeleteSiteBusy] = useState(false)
   const [clientPage, setClientPage] = useState(1)
-  const [exportBusy, setExportBusy] = useState(false)
+  const exportLock = useAsyncLock()
   const prevSelectedClientNameRef = useRef<string | null>(null)
   const location = useLocation()
 
@@ -368,15 +370,16 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
   }
 
   const handleCloseEditClientModal = () => {
-    if (editClientBusy) return
+    if (updateClientLock.locked) return
     setEditingClient(null)
     setEditClientName('')
     setEditClientPhone('')
     setEditClientError('')
   }
 
-  const handleUpdateClient = async () => {
-    if (!editingClient?.id || editClientBusy) return
+  const handleUpdateClient = () => {
+    void updateClientLock.run(async () => {
+    if (!editingClient?.id) return
     const name = editClientName.trim()
     const phone = editClientPhone.trim()
 
@@ -401,7 +404,6 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
       return
     }
 
-    setEditClientBusy(true)
     try {
       const res = await http.patch<{ ok: boolean; client: ClientRow; error?: string }>(
         `/api/clients/${editingClient.id}`,
@@ -424,9 +426,8 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
           ? String((e.response?.data as { error?: string }).error)
           : 'Could not update client.'
       setEditClientError(msg)
-    } finally {
-      setEditClientBusy(false)
     }
+    })
   }
 
   const handleOpenAddSiteModal = () => {
@@ -449,7 +450,8 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
     setEditingSite(null)
   }
 
-  const handleCreateClient = async () => {
+  const handleCreateClient = () => {
+    void createClientLock.run(async () => {
     const name = newClientName.trim()
     const phone = newClientPhone.trim()
 
@@ -498,6 +500,7 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
           : 'Could not create client.'
       setAddClientError(msg)
     }
+    })
   }
 
   const getSiteDetailsPath = (clientName: string, site: SiteRow) => {
@@ -514,9 +517,9 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
     return `/site-details?${params.toString()}`
   }
 
-  const handleExportClientPdf = async () => {
-    if (!selectedClient?.id || exportBusy) return
-    setExportBusy(true)
+  const handleExportClientPdf = () => {
+    if (!selectedClient?.id) return
+    void exportLock.run(async () => {
     try {
       const res = await http.get<{
         ok: boolean
@@ -575,14 +578,13 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
       )
     } catch {
       toast.error('Could not export client PDF')
-    } finally {
-      setExportBusy(false)
     }
+    })
   }
 
-  const handleExportClientExcel = async () => {
-    if (!selectedClient?.id || exportBusy) return
-    setExportBusy(true)
+  const handleExportClientExcel = () => {
+    if (!selectedClient?.id) return
+    void exportLock.run(async () => {
     try {
       const res = await http.get<{
         ok: boolean
@@ -612,7 +614,7 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
         return
       }
       await runExport('client spreadsheet', async () => {
-        const { exportClientExcel } = await import('./utils/exportClientsReport')
+        const { exportClientExcel } = await import('../utils/exportClientsReport')
         return exportClientExcel({
           client: res.data.client ?? selectedClient,
           sites: res.data.sites ?? selectedSites,
@@ -623,9 +625,8 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
       })
     } catch {
       toast.error('Could not export client spreadsheet')
-    } finally {
-      setExportBusy(false)
     }
+    })
   }
 
   const handleOpenDeleteClient = () => {
@@ -708,37 +709,37 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
   }
 
   const handleExportAllClientsPdf = () => {
-    if (exportBusy) return
-    setExportBusy(true)
-    const { admin, coworker } = resolveLedgerReportHeaderContacts({
-      user,
-      companyAdmins,
-      activeInstrumentId,
-      instrumentCoworkers: instrumentCoworkers.map((c) => ({
-        adminId: c.adminId,
-        fullName: c.fullName,
-        phone: c.phone,
-      })),
+    void exportLock.run(async () => {
+      const { admin, coworker } = resolveLedgerReportHeaderContacts({
+        user,
+        companyAdmins,
+        activeInstrumentId,
+        instrumentCoworkers: instrumentCoworkers.map((c) => ({
+          adminId: c.adminId,
+          fullName: c.fullName,
+          phone: c.phone,
+        })),
+      })
+      await runExport('clients PDF', () =>
+        lazyExportAllClientsPdf({
+          clients: filteredRows,
+          companyName: company?.name,
+          adminName: admin.fullName || company?.name || 'Admin',
+          adminPhone: admin.phone,
+          coworkerName: coworker?.fullName,
+          coworkerPhone: coworker?.phone,
+        }),
+      )
     })
-    void runExport('clients PDF', () =>
-      lazyExportAllClientsPdf({
-        clients: filteredRows,
-        companyName: company?.name,
-        adminName: admin.fullName || company?.name || 'Admin',
-        adminPhone: admin.phone,
-        coworkerName: coworker?.fullName,
-        coworkerPhone: coworker?.phone,
-      }),
-    ).finally(() => setExportBusy(false))
   }
 
   const handleExportAllClientsExcel = () => {
-    if (exportBusy) return
-    setExportBusy(true)
-    void runExport('clients spreadsheet', async () => {
-      const { exportAllClientsExcel } = await import('./utils/exportClientsReport')
-      return exportAllClientsExcel(filteredRows)
-    }).finally(() => setExportBusy(false))
+    void exportLock.run(async () => {
+      await runExport('clients spreadsheet', async () => {
+        const { exportAllClientsExcel } = await import('../utils/exportClientsReport')
+        return exportAllClientsExcel(filteredRows)
+      })
+    })
   }
 
   return (
@@ -1135,10 +1136,10 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
                       <button
                         type="button"
                         className={toolbarSecondaryButtonClass}
-                        disabled={exportBusy || filteredRows.length === 0}
+                        disabled={exportLock.locked || filteredRows.length === 0}
                         onClick={handleExportAllClientsPdf}
                       >
-                        {exportBusy ? 'Exporting…' : 'Export'}
+                        {exportLock.locked ? 'Exporting…' : 'Export'}
                       </button>
                     
                       <button
@@ -1180,10 +1181,10 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
                   <button
                     type="button"
                     className={toolbarSecondaryButtonClass}
-                    disabled={exportBusy}
+                    disabled={exportLock.locked}
                     onClick={handleExportClientPdf}
                   >
-                    {exportBusy ? '…' : 'Export'}
+                    {exportLock.locked ? '…' : 'Export'}
                   </button>
                   <button
                     type="button"
@@ -1816,10 +1817,11 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
               <button
                 type="button"
                 onClick={handleCreateClient}
-                className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-[#f39b03] px-4 text-xs font-extrabold text-white transition hover:bg-[#e18e03] md:text-sm"
+                disabled={createClientLock.locked}
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-[#f39b03] px-4 text-xs font-extrabold text-white transition hover:bg-[#e18e03] disabled:opacity-60 md:text-sm"
               >
                 <Plus size={14} />
-                Create Client
+                {createClientLock.locked ? 'Creating…' : 'Create Client'}
               </button>
             </div>
           </div>
@@ -1845,7 +1847,7 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
                 className="grid h-9 w-9 place-items-center rounded-xl bg-neutral-100 text-neutral-700 transition hover:bg-neutral-200"
                 onClick={handleCloseEditClientModal}
                 aria-label="Close"
-                disabled={editClientBusy}
+                disabled={updateClientLock.locked}
               >
                 <X size={16} />
               </button>
@@ -1888,7 +1890,7 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
               <button
                 type="button"
                 onClick={handleCloseEditClientModal}
-                disabled={editClientBusy}
+                disabled={updateClientLock.locked}
                 className="inline-flex h-10 items-center justify-center rounded-xl border border-neutral-200 bg-white px-4 text-xs font-extrabold text-neutral-800 transition hover:bg-neutral-50 disabled:opacity-60 md:text-sm"
               >
                 Cancel
@@ -1896,10 +1898,10 @@ export default function ClientsSites({ onNavigate }: ClientsSitesProps) {
               <button
                 type="button"
                 onClick={handleUpdateClient}
-                disabled={editClientBusy}
+                disabled={updateClientLock.locked}
                 className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-[#f39b03] px-4 text-xs font-extrabold text-white transition hover:bg-[#e18e03] disabled:opacity-60 md:text-sm"
               >
-                {editClientBusy ? 'Saving…' : 'Save Changes'}
+                {updateClientLock.locked ? 'Saving…' : 'Save Changes'}
               </button>
             </div>
           </div>

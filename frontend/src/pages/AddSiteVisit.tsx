@@ -23,9 +23,9 @@ import {
 } from 'lucide-react'
 import { Fragment, useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useLocation } from 'react-router-dom'
-import { AccountManagerSidebarBlock } from './AccountManagerSidebarBlock'
-import { CollaborationBrandMark } from './CollaborationBrandMark'
-import { LayoutFooter } from './LayoutFooter'
+import { AccountManagerSidebarBlock } from '../AccountManagerSidebarBlock'
+import { CollaborationBrandMark } from '../CollaborationBrandMark'
+import { LayoutFooter } from '../LayoutFooter'
 import {
   CardPanel,
   CardShell,
@@ -34,30 +34,30 @@ import {
   toolbarPrimaryButtonClass,
   toolbarSearchInputClass,
   toolbarSecondaryButtonClass,
-} from './dashboardCards'
-import { ConfirmAlert } from './ConfirmAlert'
-import { AppSelect } from './components/AppSelect'
+} from '../dashboardCards'
+import { ConfirmAlert } from '../ConfirmAlert'
+import { AppSelect } from '../components/AppSelect'
 import { isAxiosError } from 'axios'
-import { layoutBrandLogo } from './brandLogo'
-import { HeaderAdminBadge } from './components/HeaderAdminBadge'
-import { HeaderYearSelect } from './components/HeaderYearSelect'
-import { useInstrumentHeaderAdminName } from './hooks/useInstrumentHeaderAdminName'
-import { BackgroundRefreshIndicator } from './components/BackgroundRefreshIndicator'
-import { PageRefreshButton } from './components/PageRefreshButton'
-import { useClients, useInstrumentCoworkers, useSites, useSiteVisits } from './hooks/queries'
-import { resolveInstrumentReportHeaderContacts } from './utils/pdfAdminContacts'
-import { invalidateAfterVisitChange } from './lib/invalidate'
+import { layoutBrandLogo } from '../brandLogo'
+import { HeaderAdminBadge } from '../components/HeaderAdminBadge'
+import { HeaderYearSelect } from '../components/HeaderYearSelect'
+import { BackgroundRefreshIndicator } from '../components/BackgroundRefreshIndicator'
+import { PageRefreshButton } from '../components/PageRefreshButton'
+import { useAsyncLock } from '../hooks/useAsyncLock'
+import { useClients, useInstrumentCoworkers, useSites, useSiteVisits } from '../hooks/queries'
+import { resolveInstrumentReportHeaderContacts } from '../utils/pdfAdminContacts'
+import { invalidateAfterVisitChange } from '../lib/invalidate'
 import { useQueryClient } from '@tanstack/react-query'
-import { getHeaderDateLabel } from './headerDateLabel'
+import { getHeaderDateLabel } from '../headerDateLabel'
 import { toast } from 'sonner'
-import http from './api/http'
-import { useAuth } from './context/AuthContext'
-import { useSelectedYear } from './context/SelectedYearContext'
-import { signOut } from './signOut'
-import { lazyExportSiteVisitsPdf } from './utils/lazyPdf'
-import { runExport } from './utils/runExport'
-import { computeVisitListStats } from './utils/visitListStats'
-import { validateSiteVisitForm } from './utils/validateSiteVisit'
+import http from '../services/http'
+import { useAuth } from '../context/AuthContext'
+import { useSelectedYear } from '../context/SelectedYearContext'
+import { signOut } from '../signOut'
+import { lazyExportSiteVisitsPdf } from '../utils/lazyPdf'
+import { runExport } from '../utils/runExport'
+import { computeVisitListStats } from '../utils/visitListStats'
+import { validateSiteVisitForm } from '../utils/validateSiteVisit'
 
 type NavItem = {
   label: string
@@ -147,9 +147,9 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
   const [visitListSearch, setVisitListSearch] = useState('')
   const [visitPaymentStatusFilter, setVisitPaymentStatusFilter] = useState('all')
   const [pendingDeleteVisit, setPendingDeleteVisit] = useState<VisitRecord | null>(null)
-  const [deleteVisitBusy, setDeleteVisitBusy] = useState(false)
-  const [isSubmittingVisit, setIsSubmittingVisit] = useState(false)
-  const [exportBusy, setExportBusy] = useState(false)
+  const visitSubmitLock = useAsyncLock()
+  const deleteVisitLock = useAsyncLock()
+  const exportLock = useAsyncLock()
   const [showAddForm, setShowAddForm] = useState(false)
   const [client, setClient] = useState('')
   const [site, setSite] = useState('')
@@ -208,7 +208,6 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
     })
   }, [visitRecordsRaw, sitesQuery.data, activeInstrumentId])
 
-  const instrumentHeaderAdminName = useInstrumentHeaderAdminName()
   const headerAdminRoleLabel = user?.role === 'super_admin' ? 'Super Admin' : 'Admin'
 
   const activeInstrumentName = useMemo(() => {
@@ -309,35 +308,34 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
 
   const visitRowKey = (r: VisitRecord) => r.visitMongoId ?? r._id ?? r.id
 
-  const handleConfirmDeleteVisit = async () => {
-    if (!pendingDeleteVisit) return
-    const mid = pendingDeleteVisit.visitMongoId ?? pendingDeleteVisit._id
-    if (!mid) {
-      toast.error('Missing visit id')
-      setPendingDeleteVisit(null)
-      return
-    }
-    setDeleteVisitBusy(true)
-    try {
-      const res = await http.delete<{ ok?: boolean; success?: boolean; message?: string }>(
-        `/api/site-visits/${mid}`,
-      )
-      if (!res.data?.ok && !res.data?.success) {
-        toast.error('Could not delete visit')
+  const handleConfirmDeleteVisit = () => {
+    void deleteVisitLock.run(async () => {
+      if (!pendingDeleteVisit) return
+      const mid = pendingDeleteVisit.visitMongoId ?? pendingDeleteVisit._id
+      if (!mid) {
+        toast.error('Missing visit id')
+        setPendingDeleteVisit(null)
         return
       }
-      toast.success(res.data.message ?? 'Site visit and related photos deleted successfully')
-      setPendingDeleteVisit(null)
-      setShowAddForm(false)
-      if (mode === 'add') {
-        onNavigate('/site-visits')
+      try {
+        const res = await http.delete<{ ok?: boolean; success?: boolean; message?: string }>(
+          `/api/site-visits/${mid}`,
+        )
+        if (!res.data?.ok && !res.data?.success) {
+          toast.error('Could not delete visit')
+          return
+        }
+        toast.success(res.data.message ?? 'Site visit and related photos deleted successfully')
+        setPendingDeleteVisit(null)
+        setShowAddForm(false)
+        if (mode === 'add') {
+          onNavigate('/site-visits')
+        }
+        invalidateAfterVisitChange(queryClient, selectedYear, activeInstrumentId)
+      } catch {
+        toast.error('Could not delete visit')
       }
-      invalidateAfterVisitChange(queryClient, selectedYear, activeInstrumentId)
-    } catch {
-      toast.error('Could not delete visit')
-    } finally {
-      setDeleteVisitBusy(false)
-    }
+    })
   }
 
   const mobileBottomNav = [
@@ -574,19 +572,11 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
                 </div>
                 <PageRefreshButton variant="onDark" />
               </div>
-              <div className="flex items-start justify-between gap-3 border-t border-white/10 px-4 py-3">
-                <div className="min-w-0 flex-1">
-                  <h1 className="truncate text-left text-base font-extrabold leading-tight tracking-tight text-white">
-                    Site Visits
-                  </h1>
-                  <HeaderAdminBadge
-                    variant="mobile"
-                    name={instrumentHeaderAdminName || user?.fullName || ''}
-                    roleLabel={headerAdminRoleLabel}
-                    withErPrefix
-                  />
-                </div>
-                <div className="flex shrink-0 items-center gap-2 pt-0.5">
+              <div className="flex items-center justify-between gap-3 border-t border-white/10 px-4 py-3">
+                <h1 className="min-w-0 flex-1 truncate text-left text-base font-extrabold leading-tight tracking-tight text-white">
+                  Site Visits
+                </h1>
+                <div className="flex shrink-0 items-center gap-2">
                   <BackgroundRefreshIndicator isFetching={listFetching} hasData={hasListData} />
                   <HeaderYearSelect variant="onDark" compact />
                 </div>
@@ -612,7 +602,7 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
                 <PageRefreshButton variant="onLight" />
                 <HeaderYearSelect variant="onLight" />
                 <HeaderAdminBadge
-                  name={instrumentHeaderAdminName || user?.fullName || ''}
+                  name={user?.fullName || ''}
                   roleLabel={headerAdminRoleLabel}
                   withErPrefix
                 />
@@ -706,47 +696,48 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
                     ) : null}
                     <button
                       type="button"
-                      disabled={filteredVisitRecords.length === 0 || exportBusy}
+                      disabled={filteredVisitRecords.length === 0 || exportLock.locked}
                       onClick={() => {
-                        if (filteredVisitRecords.length === 0 || exportBusy) return
-                        setExportBusy(true)
-                        const { admin, coworker } = resolveInstrumentReportHeaderContacts({
-                          companyAdmins,
-                          activeInstrumentId,
-                          instrumentCoworkers: instrumentCoworkers.map((c) => ({
-                            adminId: c.adminId,
-                            fullName: c.fullName,
-                            phone: c.phone,
-                          })),
-                        })
-                        void runExport('PDF', () =>
-                          lazyExportSiteVisitsPdf(
-                            filteredVisitRecords.map((r) => ({
-                              id: r.id,
-                              client: r.client,
-                              site: r.site,
-                              date: r.date,
-                              amount: r.amount,
-                              paymentStatus: r.paymentStatus,
-                              machine: r.machine,
+                        if (filteredVisitRecords.length === 0) return
+                        void exportLock.run(async () => {
+                          const { admin, coworker } = resolveInstrumentReportHeaderContacts({
+                            companyAdmins,
+                            activeInstrumentId,
+                            instrumentCoworkers: instrumentCoworkers.map((c) => ({
+                              adminId: c.adminId,
+                              fullName: c.fullName,
+                              phone: c.phone,
                             })),
-                            {
-                              year: selectedYear,
-                              filterNote: visitListFilterNote,
-                              instrumentName: activeInstrumentName,
-                              companyName: company?.name,
-                              adminName: admin.fullName,
-                              adminPhone: admin.phone,
-                              coworkerName: coworker?.fullName,
-                              coworkerPhone: coworker?.phone,
-                            },
-                          ),
-                        ).finally(() => setExportBusy(false))
+                          })
+                          await runExport('PDF', () =>
+                            lazyExportSiteVisitsPdf(
+                              filteredVisitRecords.map((r) => ({
+                                id: r.id,
+                                client: r.client,
+                                site: r.site,
+                                date: r.date,
+                                amount: r.amount,
+                                paymentStatus: r.paymentStatus,
+                                machine: r.machine,
+                              })),
+                              {
+                                year: selectedYear,
+                                filterNote: visitListFilterNote,
+                                instrumentName: activeInstrumentName,
+                                companyName: company?.name,
+                                adminName: admin.fullName,
+                                adminPhone: admin.phone,
+                                coworkerName: coworker?.fullName,
+                                coworkerPhone: coworker?.phone,
+                              },
+                            ),
+                          )
+                        })
                       }}
                       className={[toolbarSecondaryButtonClass, 'shrink-0'].join(' ')}
                     >
                       <Download className="h-4 w-4 shrink-0 opacity-80" aria-hidden />
-                      {exportBusy ? 'Exporting…' : 'Export'}
+                      {exportLock.locked ? 'Exporting…' : 'Export'}
                     </button>
                     <button
                       type="button"
@@ -943,10 +934,9 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
                 <form
                   id={formId}
                   className="space-y-6"
-                  onSubmit={async (e) => {
+                  onSubmit={(e) => {
                     e.preventDefault()
-                    if (isSubmittingVisit) return
-
+                    void visitSubmitLock.run(async () => {
                     const validationError = validateSiteVisitForm({
                       client,
                       site,
@@ -967,7 +957,6 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
                       return
                     }
                     const amountNum = amountRupees
-                    setIsSubmittingVisit(true)
                     try {
                       const visitPayload = {
                         siteId: match.id,
@@ -1059,9 +1048,8 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
                         ? (err.response?.data as { error?: string } | undefined)?.error
                         : undefined
                       toast.error(apiMsg ?? 'Could not save visit. Photos were not saved.')
-                    } finally {
-                      setIsSubmittingVisit(false)
                     }
+                    })
                   }}
                 >
                 <CardShell title="Visit Details">
@@ -1413,10 +1401,10 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
                   <button
                     type="submit"
                     form={formId}
-                    disabled={isSubmittingVisit}
+                    disabled={visitSubmitLock.locked}
                     className="inline-flex h-11 items-center justify-center rounded-xl bg-[#f39b03] px-8 text-sm font-extrabold text-white transition hover:bg-[#e18e03] disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    {isSubmittingVisit ? 'Saving…' : 'Save Visit'}
+                    {visitSubmitLock.locked ? 'Saving…' : 'Save Visit'}
                   </button>
                 </div>
                 </form>
@@ -1437,15 +1425,13 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
         }
         confirmLabel="Delete visit"
         cancelLabel="Cancel"
-        confirmBusy={deleteVisitBusy}
+        confirmBusy={deleteVisitLock.locked}
         variant="danger"
         rootClassName="fixed inset-0 z-[80] flex items-center justify-center p-4"
         onCancel={() => {
-          if (!deleteVisitBusy) setPendingDeleteVisit(null)
+          if (!deleteVisitLock.locked) setPendingDeleteVisit(null)
         }}
-        onConfirm={() => {
-          void handleConfirmDeleteVisit()
-        }}
+        onConfirm={handleConfirmDeleteVisit}
       />
 
       <nav

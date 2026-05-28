@@ -1,5 +1,5 @@
 import type { QueryClient } from '@tanstack/react-query'
-import { fetchClients, fetchDashboard, fetchInstrumentCoworkers, fetchSites } from '../api/surveyQueries'
+import { fetchClients, fetchDashboard, fetchInstrumentCoworkers, fetchSites } from '../services/surveyQueries'
 import { queryKeys } from './queryKeys'
 import { STALE_TIMES } from './staleTimes'
 

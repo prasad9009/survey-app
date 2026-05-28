@@ -24,11 +24,11 @@ import {
 import { useQueryClient } from '@tanstack/react-query'
 import { Fragment, useCallback, useMemo, useState, type ReactNode } from 'react'
 import { useLocation as useRouterLocation, useNavigate } from 'react-router-dom'
-import type { VisitDto } from './api/surveyQueries'
-import { useSelectedYear } from './context/SelectedYearContext'
-import { AccountManagerSidebarBlock } from './AccountManagerSidebarBlock'
-import { CollaborationBrandMark } from './CollaborationBrandMark'
-import { LayoutFooter } from './LayoutFooter'
+import type { VisitDto } from '../services/surveyQueries'
+import { useSelectedYear } from '../context/SelectedYearContext'
+import { AccountManagerSidebarBlock } from '../AccountManagerSidebarBlock'
+import { CollaborationBrandMark } from '../CollaborationBrandMark'
+import { LayoutFooter } from '../LayoutFooter'
 import {
   CardPanel,
   CardShell,
@@ -37,36 +37,41 @@ import {
   toolbarPrimaryButtonClass,
   toolbarSearchInputClass,
   toolbarSecondaryButtonClass,
-} from './dashboardCards'
-import { ConfirmAlert } from './ConfirmAlert'
-import { EditSiteVisitModal, type EditSiteVisitInitial } from './components/EditSiteVisitModal'
-import type { InvoicePdfBillingLine } from './exportInvoicePdf'
+} from '../dashboardCards'
+import { ConfirmAlert } from '../ConfirmAlert'
+import { EditSiteVisitModal, type EditSiteVisitInitial } from '../components/EditSiteVisitModal'
+import { IndividualInvoiceModal } from '../components/IndividualInvoiceModal'
+import type { InvoicePdfBillingLine } from '../exportInvoicePdf'
 import {
   lazyExportCombinedSiteInvoicePdf,
   lazyExportInvoicePdf,
   lazyExportSiteReportPdf,
   lazyExportVisitRecordPdf,
-} from './utils/lazyPdf'
-import { formatBillingLinesForDisplay } from './utils/formatBillingLines'
-import { todayInvoiceDate } from './utils/invoiceDate'
-import { AppSelect } from './components/AppSelect'
+} from '../utils/lazyPdf'
+import { formatBillingLinesForDisplay } from '../utils/formatBillingLines'
+import { todayInvoiceDate } from '../utils/invoiceDate'
+import { AppSelect } from '../components/AppSelect'
 import { toast } from 'sonner'
-import { HeaderAdminBadge } from './components/HeaderAdminBadge'
-import { HeaderYearSelect } from './components/HeaderYearSelect'
-import { useInstrumentHeaderAdminName } from './hooks/useInstrumentHeaderAdminName'
-import { PageRefreshButton } from './components/PageRefreshButton'
-import { usePageRefresh } from './context/RefreshContext'
-import { signOut } from './signOut'
-import http from './api/http'
-import { useAuth } from './context/AuthContext'
-import { useSiteVisits } from './hooks/queries'
-import { useInstrumentCoworkers } from './hooks/queries/useInstrumentCoworkers'
-import { useQueryScope } from './hooks/useScopeQuery'
-import { queryKeys } from './lib/queryKeys'
-import { runExport } from './utils/runExport'
-import { computeVisitListStats } from './utils/visitListStats'
-import { fetchInvoiceBankColumns } from './invoiceBankColumns'
-import { instrumentScopedAdmins, resolveLedgerReportHeaderContacts } from './utils/pdfAdminContacts'
+import { HeaderAdminBadge } from '../components/HeaderAdminBadge'
+import { HeaderYearSelect } from '../components/HeaderYearSelect'
+import { PageRefreshButton } from '../components/PageRefreshButton'
+import { useAsyncLock } from '../hooks/useAsyncLock'
+import { usePageRefresh } from '../context/RefreshContext'
+import { signOut } from '../signOut'
+import http from '../services/http'
+import { useAuth } from '../context/AuthContext'
+import { useSiteVisits } from '../hooks/queries'
+import { useInstrumentCoworkers } from '../hooks/queries/useInstrumentCoworkers'
+import { useQueryScope } from '../hooks/useScopeQuery'
+import { queryKeys } from '../lib/queryKeys'
+import { runExport } from '../utils/runExport'
+import { computeVisitListStats } from '../utils/visitListStats'
+import { fetchInvoiceBankColumns } from '../invoiceBankColumns'
+import {
+  instrumentScopedAdmins,
+  resolveInstrumentReportHeaderContacts,
+  resolveLedgerReportHeaderContacts,
+} from '../utils/pdfAdminContacts'
 
 type NavItem = {
   label: string
@@ -111,6 +116,21 @@ type SiteVisitRecord = {
   billingOtherCharges?: number
   dwgRefBy?: string
   dwgNo?: string
+}
+
+type PendingIndividualInvoice = {
+  visitId?: string
+  siteLine: string
+  workType: string
+  totalPoints: number
+  ratePerPoint: number
+  baseCharge: number
+  extraCharges: number
+  discount: number
+  paymentStatus?: string
+  pendingAmount: number
+  billingLines?: InvoicePdfBillingLine[]
+  billingOtherCharges?: number
 }
 
 function visitDtoToSiteRecord(v: VisitDto): SiteVisitRecord {
@@ -168,9 +188,9 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
   const [visitMachineFilter, setVisitMachineFilter] = useState('all')
   const [visitPaymentFilter, setVisitPaymentFilter] = useState('all')
   const [visitPaymentStatusFilter, setVisitPaymentStatusFilter] = useState('all')
-  const [exportBusy, setExportBusy] = useState(false)
+  const exportLock = useAsyncLock()
+  const deleteVisitLock = useAsyncLock()
   const [pendingDeleteVisit, setPendingDeleteVisit] = useState<SiteVisitRecord | null>(null)
-  const [deleteVisitBusy, setDeleteVisitBusy] = useState(false)
   const navigate = useNavigate()
   const { pathname: routerPathname, search } = useRouterLocation()
   const urlParams = useMemo(() => new URLSearchParams(search), [search])
@@ -223,6 +243,8 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
   } | null>(null)
   const [editVisitOpen, setEditVisitOpen] = useState(false)
   const [editVisitInitial, setEditVisitInitial] = useState<EditSiteVisitInitial | null>(null)
+  const [individualInvoiceOpen, setIndividualInvoiceOpen] = useState(false)
+  const [pendingIndividualInvoice, setPendingIndividualInvoice] = useState<PendingIndividualInvoice | null>(null)
 
   const loadVisitDetail = useCallback(async () => {
     if (!isVisitMode) {
@@ -471,7 +493,8 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
   }
 
   const handleExportSiteReport = () => {
-    if (filteredVisitRecords.length === 0 || exportBusy) return
+    if (filteredVisitRecords.length === 0) return
+    void exportLock.run(async () => {
     const filterNote = hasActiveVisitFilters
       ? `Filtered export · ${filteredVisitRecords.length} of ${relatedVisitRecords.length} visits`
       : undefined
@@ -485,8 +508,7 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
         phone: c.phone,
       })),
     })
-    setExportBusy(true)
-    void runExport('site report', () =>
+    await runExport('site report', () =>
       lazyExportSiteReportPdf({
         client,
         siteName: name,
@@ -511,7 +533,8 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
           work: r.work,
         })),
       }),
-    ).finally(() => setExportBusy(false))
+    )
+    })
   }
 
   const buildSiteListParams = useCallback(() => {
@@ -525,39 +548,38 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
     return params
   }, [client, name, siteId, effectiveLocation, lastVisit, status, pending, receivedParam])
 
-  const handleConfirmDeleteVisit = async () => {
-    if (!pendingDeleteVisit) return
-    const mid = pendingDeleteVisit.visitMongoId
-    if (!mid) {
-      toast.error('Missing visit id')
-      setPendingDeleteVisit(null)
-      return
-    }
-    setDeleteVisitBusy(true)
-    try {
-      const res = await http.delete<{ ok?: boolean; success?: boolean; message?: string }>(
-        `/api/site-visits/${mid}`,
-      )
-      if (!res.data?.ok && !res.data?.success) {
+  const handleConfirmDeleteVisit = () => {
+    void deleteVisitLock.run(async () => {
+      if (!pendingDeleteVisit) return
+      const mid = pendingDeleteVisit.visitMongoId
+      if (!mid) {
+        toast.error('Missing visit id')
+        setPendingDeleteVisit(null)
+        return
+      }
+      try {
+        const res = await http.delete<{ ok?: boolean; success?: boolean; message?: string }>(
+          `/api/site-visits/${mid}`,
+        )
+        if (!res.data?.ok && !res.data?.success) {
+          toast.error('Could not delete visit')
+          return
+        }
+        toast.success(res.data.message ?? 'Site visit and related photos deleted successfully')
+        setPendingDeleteVisit(null)
+        queryClient.setQueryData<VisitDto[]>(
+          queryKeys.visits(scopeYear, scopeInstrumentId),
+          (prev) => prev?.filter((v) => (v.visitMongoId ?? v._id) !== mid),
+        )
+        if (isVisitMode && visitMongoId === mid) {
+          navigate(`/site-details?${buildSiteListParams().toString()}`, { replace: true })
+          return
+        }
+        reloadSiteVisits()
+      } catch {
         toast.error('Could not delete visit')
-        return
       }
-      toast.success(res.data.message ?? 'Site visit and related photos deleted successfully')
-      setPendingDeleteVisit(null)
-      queryClient.setQueryData<VisitDto[]>(
-        queryKeys.visits(scopeYear, scopeInstrumentId),
-        (prev) => prev?.filter((v) => (v.visitMongoId ?? v._id) !== mid),
-      )
-      if (isVisitMode && visitMongoId === mid) {
-        navigate(`/site-details?${buildSiteListParams().toString()}`, { replace: true })
-        return
-      }
-      reloadSiteVisits()
-    } catch {
-      toast.error('Could not delete visit')
-    } finally {
-      setDeleteVisitBusy(false)
-    }
+    })
   }
   const getVisitDetailsPath = (record: SiteVisitRecord) => {
     const next = new URLSearchParams({
@@ -585,8 +607,23 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
     if (siteId) next.set('siteId', siteId)
     return `/site-details?${next.toString()}`
   }
-  const instrumentHeaderAdminName = useInstrumentHeaderAdminName()
   const headerAdminRoleLabel = user?.role === 'super_admin' ? 'Super Admin' : 'Admin'
+
+  const headerAdminContactName = useMemo(() => {
+    const { admin } = resolveInstrumentReportHeaderContacts({
+      companyAdmins,
+      activeInstrumentId,
+      instrumentCoworkers,
+    })
+    return admin.fullName?.trim() || ''
+  }, [companyAdmins, activeInstrumentId, instrumentCoworkers])
+
+  const profileDisplayName =
+    user?.fullName?.trim() || headerAdminContactName || user?.email?.trim() || 'User'
+  const sessionDisplayName =
+    user?.fullName?.trim() || headerAdminContactName
+      ? `Er. ${(user?.fullName?.trim() || headerAdminContactName).trim()}`
+      : profileDisplayName
 
   const pageTitle = isVisitMode ? 'Site Visit Details' : 'Site Details'
   const backPath = isVisitMode ? '/site-visits' : '/clients-sites'
@@ -640,35 +677,92 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
     [activeInstrumentId],
   )
 
+  const openIndividualInvoice = (payload: PendingIndividualInvoice) => {
+    setPendingIndividualInvoice(payload)
+    setIndividualInvoiceOpen(true)
+  }
+
   const handleIndividualVisitInvoice = (record: SiteVisitRecord) => {
-    if (exportBusy) return
     const pendingNum = pendingAmountNum(record)
     const hasBilling = Boolean(record.billingLines?.length)
-    setExportBusy(true)
-    void runExport('invoice', async () => {
-      const bankColumns = await loadInvoiceBankColumns()
-      return lazyExportInvoicePdf({
-        client,
-        site: `${siteAddressLine} (Visit ${record.id})`,
-        workType: record.machine,
-        totalPoints: 1,
-        ratePerPoint: pendingNum > 0 ? pendingNum : 0,
-        baseCharge: 0,
-        extraCharges: 0,
-        discount: 0,
-        invoiceDate: todayInvoiceDate(),
-        visitId: record.id,
-        paymentStatus: record.paymentStatus,
-        pendingAmount: pendingNum,
-        bankColumns,
-        ...(hasBilling
-          ? {
-              billingLines: record.billingLines,
-              billingOtherCharges: record.billingOtherCharges ?? 0,
-            }
-          : {}),
+    openIndividualInvoice({
+      visitId: record.id,
+      siteLine: `${siteAddressLine} (Visit ${record.id})`,
+      workType: record.machine,
+      totalPoints: 1,
+      ratePerPoint: pendingNum > 0 ? pendingNum : 0,
+      baseCharge: 0,
+      extraCharges: 0,
+      discount: 0,
+      paymentStatus: record.paymentStatus,
+      pendingAmount: pendingNum,
+      ...(hasBilling
+        ? {
+            billingLines: record.billingLines,
+            billingOtherCharges: record.billingOtherCharges ?? 0,
+          }
+        : {}),
+    })
+  }
+
+  const openCurrentVisitIndividualInvoice = () => {
+    const pendingForVisit =
+      visitPendingForInvoice != null && visitPendingForInvoice.trim() !== ''
+        ? parseVisitAmount(visitPendingForInvoice)
+        : parseVisitAmount(effectiveAmount)
+    const hasBilling = visitBillingForInvoice.billingLines.length > 0
+    openIndividualInvoice({
+      visitId: visitId !== '-' ? visitId : undefined,
+      siteLine: `${siteAddressLine} (Visit ${visitId})`,
+      workType: effectiveMachine,
+      totalPoints: 1,
+      ratePerPoint: pendingForVisit > 0 ? pendingForVisit : 0,
+      baseCharge: 0,
+      extraCharges: 0,
+      discount: 0,
+      paymentStatus: effectivePaymentStatus !== '-' ? effectivePaymentStatus : undefined,
+      pendingAmount: pendingForVisit,
+      ...(hasBilling
+        ? {
+            billingLines: visitBillingForInvoice.billingLines,
+            billingOtherCharges: visitBillingForInvoice.billingOtherCharges,
+          }
+        : {}),
+    })
+  }
+
+  const handleGenerateIndividualInvoice = (invoiceNumber: string, invoiceDate: string) => {
+    if (!pendingIndividualInvoice) return
+    void exportLock.run(async () => {
+      const payload = pendingIndividualInvoice
+      await runExport('invoice', async () => {
+        const bankColumns = await loadInvoiceBankColumns()
+        return lazyExportInvoicePdf({
+          client,
+          site: payload.siteLine,
+          workType: payload.workType,
+          totalPoints: payload.totalPoints,
+          ratePerPoint: payload.ratePerPoint,
+          baseCharge: payload.baseCharge,
+          extraCharges: payload.extraCharges,
+          discount: payload.discount,
+          invoiceDate,
+          invoiceNumber,
+          visitId: payload.visitId,
+          paymentStatus: payload.paymentStatus,
+          pendingAmount: payload.pendingAmount,
+          bankColumns,
+          ...(payload.billingLines?.length
+            ? {
+                billingLines: payload.billingLines,
+                billingOtherCharges: payload.billingOtherCharges ?? 0,
+              }
+            : {}),
+        })
       })
-    }).finally(() => setExportBusy(false))
+      setIndividualInvoiceOpen(false)
+      setPendingIndividualInvoice(null)
+    })
   }
 
   const openEditVisit = (record?: SiteVisitRecord) => {
@@ -695,7 +789,8 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
   }
 
   const handleCommonSiteInvoice = () => {
-    if (exportBusy || relatedVisitRecords.length === 0) return
+    if (relatedVisitRecords.length === 0) return
+    void exportLock.run(async () => {
     const visits = relatedVisitRecords.map((r) => ({
       visitId: r.id,
       visitNo: r.visitNo,
@@ -705,8 +800,7 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
       billingLines: r.billingLines,
       amount: pendingAmountNum(r),
     }))
-    setExportBusy(true)
-    void runExport('combined invoice', async () => {
+    await runExport('combined invoice', async () => {
       const bankColumns = await loadInvoiceBankColumns()
       return lazyExportCombinedSiteInvoicePdf({
         client,
@@ -716,7 +810,8 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
         visits,
         bankColumns,
       })
-    }).finally(() => setExportBusy(false))
+    })
+    })
   }
 
   const handleExportVisitPdf = (record: {
@@ -738,14 +833,13 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
     dwgNo?: string
     photoUrls?: string[]
   }) => {
-    if (exportBusy) return
+    void exportLock.run(async () => {
     const photos = record.photoUrls?.length ? record.photoUrls : visitPhotoUrls
     const reportLocation = record.siteAddress?.trim() || effectiveLocation
     const reportPhone = record.sitePhone?.trim() || effectivePhone
     const reportVisitNo = record.visitNo ?? effectiveVisitNo
     const reportEngineer = record.engineerName?.trim() || effectiveEngineerName
-    setExportBusy(true)
-    void runExport('visit PDF', () =>
+    await runExport('visit PDF', () =>
       lazyExportVisitRecordPdf({
         visitId: record.visitId,
         visitNo: reportVisitNo,
@@ -772,7 +866,8 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
         engineerName: reportEngineer || '-',
         photoUrls: photos,
       }),
-    ).finally(() => setExportBusy(false))
+    )
+    })
   }
 
   const detailCards: { title: string; value: string; icon: LucideIcon; tone: string; cardTint: string }[] = isVisitMode
@@ -928,9 +1023,7 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
                 <div className="grid h-16 w-16 place-items-center rounded-2xl bg-white/10 text-white ring-1 ring-white/15">
                   <CircleUserRound size={32} strokeWidth={1.75} />
                 </div>
-                <div className="mt-3 text-base font-extrabold text-white">
-                  {instrumentHeaderAdminName || user?.fullName || 'User'}
-                </div>
+                <div className="mt-3 text-base font-extrabold text-white">{sessionDisplayName}</div>
                 <div className="mt-1 text-xs font-semibold text-white/65">
                   {user?.role === 'super_admin' ? 'Super Admin' : 'Admin'}
                 </div>
@@ -1044,19 +1137,11 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
                   <ArrowLeft size={18} />
                 </button>
               </div>
-              <div className="flex items-start justify-between gap-3 border-t border-white/10 px-4 py-3">
-                <div className="min-w-0 flex-1">
-                  <h1 className="truncate text-left text-base font-extrabold leading-tight tracking-tight text-white">
-                    {pageTitle}
-                  </h1>
-                  <HeaderAdminBadge
-                    variant="mobile"
-                    name={instrumentHeaderAdminName || user?.fullName || ''}
-                    roleLabel={headerAdminRoleLabel}
-                    withErPrefix
-                  />
-                </div>
-                <div className="flex shrink-0 items-center gap-2 pt-0.5">
+              <div className="flex items-center justify-between gap-3 border-t border-white/10 px-4 py-3">
+                <h1 className="min-w-0 flex-1 truncate text-left text-base font-extrabold leading-tight tracking-tight text-white">
+                  {pageTitle}
+                </h1>
+                <div className="flex shrink-0 items-center gap-2">
                   <PageRefreshButton variant="onDark" />
                   <HeaderYearSelect variant="onDark" compact />
                   <span className="inline-flex max-w-[5.5rem] items-center rounded-xl border border-white/20 bg-neutral-900 px-2 py-2 text-[10px] font-semibold leading-tight text-white sm:max-w-none sm:px-2.5 sm:text-[11px]">
@@ -1094,7 +1179,7 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
                 <HeaderYearSelect variant="onLight" />
 
                 <HeaderAdminBadge
-                  name={instrumentHeaderAdminName || user?.fullName || ''}
+                  name={sessionDisplayName}
                   roleLabel={headerAdminRoleLabel}
                   withErPrefix
                 />
@@ -1190,10 +1275,10 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
                     <button
                       type="button"
                       className={toolbarSecondaryButtonClass}
-                      disabled={filteredVisitRecords.length === 0 || exportBusy}
+                      disabled={filteredVisitRecords.length === 0 || exportLock.locked}
                       onClick={handleExportSiteReport}
                     >
-                      {exportBusy ? 'Exporting…' : 'Export report'}
+                      {exportLock.locked ? 'Exporting…' : 'Export report'}
                     </button>
                     <button type="button" onClick={() => onNavigate(addSiteVisitPath)} className={toolbarPrimaryButtonClass}>
                       <Plus className={toolbarPlusIconClass} />
@@ -1288,49 +1373,18 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
                           })
                         }
                       }}
-                      disabled={!visitMongoId || deleteVisitBusy}
+                      disabled={!visitMongoId || deleteVisitLock.locked}
                       className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-rose-200 bg-rose-50 px-4 text-xs font-extrabold text-rose-700 transition hover:bg-rose-100 sm:text-sm disabled:opacity-50"
                     >
                       <Trash2 size={15} />
-                      {deleteVisitBusy && pendingDeleteVisit?.visitMongoId === visitMongoId
+                      {deleteVisitLock.locked && pendingDeleteVisit?.visitMongoId === visitMongoId
                         ? 'Deleting…'
                         : 'Delete visit'}
                     </button>
                     <button
                       type="button"
-                      disabled={exportBusy}
-                      onClick={() => {
-                        if (exportBusy) return
-                        const pendingForVisit =
-                          visitPendingForInvoice != null && visitPendingForInvoice.trim() !== ''
-                            ? parseVisitAmount(visitPendingForInvoice)
-                            : parseVisitAmount(effectiveAmount)
-                        setExportBusy(true)
-                        void runExport('invoice', async () => {
-                          const bankColumns = await loadInvoiceBankColumns()
-                          return lazyExportInvoicePdf({
-                            client,
-                            site: `${siteAddressLine} (Visit ${visitId})`,
-                            workType: effectiveMachine,
-                            totalPoints: 1,
-                            ratePerPoint: pendingForVisit > 0 ? pendingForVisit : 0,
-                            baseCharge: 0,
-                            extraCharges: 0,
-                            discount: 0,
-                            invoiceDate: todayInvoiceDate(),
-                            visitId: visitId !== '-' ? visitId : undefined,
-                            paymentStatus: effectivePaymentStatus !== '-' ? effectivePaymentStatus : undefined,
-                            pendingAmount: pendingForVisit,
-                            bankColumns,
-                            ...(visitBillingForInvoice.billingLines.length
-                              ? {
-                                  billingLines: visitBillingForInvoice.billingLines,
-                                  billingOtherCharges: visitBillingForInvoice.billingOtherCharges,
-                                }
-                              : {}),
-                          })
-                        }).finally(() => setExportBusy(false))
-                      }}
+                      disabled={exportLock.locked}
+                      onClick={openCurrentVisitIndividualInvoice}
                       className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-neutral-200 bg-white px-4 text-xs font-extrabold text-neutral-800 ring-1 ring-black/5 transition hover:bg-neutral-50 sm:text-sm disabled:opacity-50"
                     >
                       <Calculator size={15} className="text-[#f39b03]" />
@@ -1460,7 +1514,7 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
                                   <button
                                     type="button"
                                     disabled={
-                                      deleteVisitBusy && pendingDeleteVisit?.visitMongoId === record.visitMongoId
+                                      deleteVisitLock.locked && pendingDeleteVisit?.visitMongoId === record.visitMongoId
                                     }
                                     onClick={(event) => {
                                       event.stopPropagation()
@@ -1469,7 +1523,7 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
                                     className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-rose-200 bg-rose-50 px-2.5 text-[10px] font-extrabold text-rose-700 transition hover:bg-rose-100 disabled:opacity-50"
                                   >
                                     <Trash2 size={12} />
-                                    {deleteVisitBusy && pendingDeleteVisit?.visitMongoId === record.visitMongoId
+                                    {deleteVisitLock.locked && pendingDeleteVisit?.visitMongoId === record.visitMongoId
                                       ? 'Deleting…'
                                       : 'Delete'}
                                   </button>
@@ -1565,7 +1619,7 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
                                     <button
                                       type="button"
                                       disabled={
-                                        deleteVisitBusy &&
+                                        deleteVisitLock.locked &&
                                         pendingDeleteVisit?.visitMongoId === record.visitMongoId
                                       }
                                       onClick={(event) => {
@@ -1575,7 +1629,7 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
                                       className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-rose-200 bg-rose-50 px-2.5 text-[11px] font-extrabold text-rose-700 transition hover:bg-rose-100 disabled:opacity-50"
                                     >
                                       <Trash2 size={12} />
-                                      {deleteVisitBusy && pendingDeleteVisit?.visitMongoId === record.visitMongoId
+                                      {deleteVisitLock.locked && pendingDeleteVisit?.visitMongoId === record.visitMongoId
                                         ? 'Deleting…'
                                         : 'Delete'}
                                     </button>
@@ -1641,6 +1695,21 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
         }}
       />
 
+      <IndividualInvoiceModal
+        open={individualInvoiceOpen}
+        visitId={pendingIndividualInvoice?.visitId}
+        client={client}
+        site={pendingIndividualInvoice?.siteLine ?? name}
+        generating={exportLock.locked}
+        onClose={() => {
+          if (!exportLock.locked) {
+            setIndividualInvoiceOpen(false)
+            setPendingIndividualInvoice(null)
+          }
+        }}
+        onGenerate={handleGenerateIndividualInvoice}
+      />
+
       <ConfirmAlert
         open={Boolean(pendingDeleteVisit)}
         variant="danger"
@@ -1652,9 +1721,9 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
             : undefined
         }
         confirmLabel="Delete visit"
-        confirmBusy={deleteVisitBusy}
+        confirmBusy={deleteVisitLock.locked}
         onCancel={() => {
-          if (!deleteVisitBusy) setPendingDeleteVisit(null)
+          if (!deleteVisitLock.locked) setPendingDeleteVisit(null)
         }}
         onConfirm={() => {
           void handleConfirmDeleteVisit()

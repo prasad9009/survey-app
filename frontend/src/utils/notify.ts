@@ -1,5 +1,5 @@
 import { toast } from 'sonner'
-import { getApiErrorMessage } from '../api/request'
+import { getApiErrorMessage } from '../services/request'
 
 export const SIGNATURE_MAX_BYTES = 1024 * 1024
 
