@@ -226,11 +226,23 @@ export function EditSiteVisitModal({ open, initial, onClose, onSaved }: EditSite
             <label className="grid gap-1"><span className="text-xs font-bold text-neutral-700">Payment mode</span><input value={paymentMode} onChange={(e) => setPaymentMode(e.target.value)} className={fieldClass} /></label>
             <label className="grid gap-1"><span className="text-xs font-bold text-neutral-700">Payment status</span><AppSelect value={paymentStatus} onChange={setPaymentStatus} className={fieldClass} options={[{ value: 'pending', label: 'Pending' }, { value: 'partial', label: 'Partial' }, { value: 'paid', label: 'Paid' }, { value: 'waived', label: 'Waived' }]} /></label>
             {billingLines.map((line, idx) => (
-              <div key={line.id} className="grid grid-cols-2 gap-2 rounded-xl border border-neutral-200 bg-neutral-50/60 p-2">
-                <input value={line.particular} onChange={(e) => setBillingLines((prev) => prev.map((r) => r.id === line.id ? { ...r, particular: e.target.value } : r))} placeholder={`Particular #${idx + 1}`} className={fieldClass} />
-                <input value={line.quantity} onChange={(e) => setBillingLines((prev) => prev.map((r) => r.id === line.id ? { ...r, quantity: e.target.value } : r))} placeholder="Qty" className={fieldClass} />
-                <input value={line.rate} onChange={(e) => setBillingLines((prev) => prev.map((r) => r.id === line.id ? { ...r, rate: e.target.value } : r))} placeholder="Rate" className={fieldClass} />
-                <input value={line.amount} onChange={(e) => setBillingLines((prev) => prev.map((r) => r.id === line.id ? { ...r, amount: e.target.value } : r))} placeholder="Flat amount" className={fieldClass} />
+              <div key={line.id} className="grid grid-cols-2 gap-3 rounded-xl border border-neutral-200 bg-neutral-50/60 p-3">
+                <label className="grid gap-1 col-span-2">
+                  <span className="text-xs font-bold text-neutral-700">Particular #{idx + 1}</span>
+                  <input value={line.particular} onChange={(e) => setBillingLines((prev) => prev.map((r) => r.id === line.id ? { ...r, particular: e.target.value } : r))} placeholder="Enter description/particular" className={fieldClass} />
+                </label>
+                <label className="grid gap-1">
+                  <span className="text-xs font-bold text-neutral-700">Quantity</span>
+                  <input value={line.quantity} onChange={(e) => setBillingLines((prev) => prev.map((r) => r.id === line.id ? { ...r, quantity: e.target.value } : r))} placeholder="Quantity" className={fieldClass} />
+                </label>
+                <label className="grid gap-1">
+                  <span className="text-xs font-bold text-neutral-700">Rate</span>
+                  <input value={line.rate} onChange={(e) => setBillingLines((prev) => prev.map((r) => r.id === line.id ? { ...r, rate: e.target.value } : r))} placeholder="Rate" className={fieldClass} />
+                </label>
+                <label className="grid gap-1 col-span-2">
+                  <span className="text-xs font-bold text-neutral-700">Flat Amount</span>
+                  <input value={line.amount} onChange={(e) => setBillingLines((prev) => prev.map((r) => r.id === line.id ? { ...r, amount: e.target.value } : r))} placeholder="Flat amount" className={fieldClass} />
+                </label>
               </div>
             ))}
             <label className="grid gap-1"><span className="text-xs font-bold text-neutral-700">Other charges</span><input value={billingOtherCharges} onChange={(e) => setBillingOtherCharges(e.target.value)} className={fieldClass} /></label>
