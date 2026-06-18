@@ -107,7 +107,7 @@ export function EditSiteVisitModal({ open, initial, onClose, onSaved }: EditSite
           (initial.machine && initial.machine.trim() !== '' && initial.machine !== '—' && initial.machine !== 'Total Station')
         )
     setShowDrawingFields(hasDwgInfo)
-    setDisableToggle(!hasDwgInfo)
+    setDisableToggle(true)
   }, [open, initial])
 
   const amountRupees = useMemo(() => {
@@ -187,7 +187,9 @@ export function EditSiteVisitModal({ open, initial, onClose, onSaved }: EditSite
                 </span>
                 {disableToggle && (
                   <p className="text-[10px] font-semibold text-neutral-400">
-                    Locked off: details not included on creation
+                    {showDrawingFields
+                      ? 'Locked: details included on creation'
+                      : 'Locked: details not included on creation'}
                   </p>
                 )}
               </div>
