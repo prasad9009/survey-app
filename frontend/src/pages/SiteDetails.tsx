@@ -120,6 +120,7 @@ type SiteVisitRecord = {
 
 type PendingIndividualInvoice = {
   visitId?: string
+  visitDate?: string
   siteLine: string
   workType: string
   totalPoints: number
@@ -687,6 +688,7 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
     const hasBilling = Boolean(record.billingLines?.length)
     openIndividualInvoice({
       visitId: record.id,
+      visitDate: record.date,
       siteLine: `${siteAddressLine} (Visit ${record.id})`,
       workType: record.machine,
       totalPoints: 1,
@@ -713,6 +715,7 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
     const hasBilling = visitBillingForInvoice.billingLines.length > 0
     openIndividualInvoice({
       visitId: visitId !== '-' ? visitId : undefined,
+      visitDate: effectiveVisitDate !== '-' ? effectiveVisitDate : undefined,
       siteLine: `${siteAddressLine} (Visit ${visitId})`,
       workType: effectiveMachine,
       totalPoints: 1,
@@ -749,6 +752,7 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
           invoiceDate,
           invoiceNumber,
           visitId: payload.visitId,
+          visitDate: payload.visitDate,
           paymentStatus: payload.paymentStatus,
           pendingAmount: payload.pendingAmount,
           bankColumns,

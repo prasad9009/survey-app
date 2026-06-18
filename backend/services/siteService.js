@@ -224,8 +224,10 @@ export async function deleteSiteWithRelated(req, siteId) {
     _id: siteId,
     companyId: req.user.companyId,
     ...(await sharedInstrumentOperationalScope(req)),
-  }).select('_id')
+  }).select('_id name clientId')
   if (!site) throw new ApiError(404, 'Site not found')
+
+  const client = await Client.findOne({ _id: site.clientId, companyId: req.user.companyId }).select('name').lean()
 
   const visits = await SiteVisit.find({ siteId: site._id, companyId: req.user.companyId })
     .select('_id photoFileIds photoUrls invoiceId')
@@ -258,7 +260,14 @@ export async function deleteSiteWithRelated(req, siteId) {
   const fileObjectIds = [...fileIdSet].map((id) => new mongoose.Types.ObjectId(id))
 
   const txOr = [{ siteId: site._id }]
+  if (site.clientId) txOr.push({ clientId: site.clientId })
   if (visitIds.length) txOr.push({ siteVisitId: { $in: visitIds } })
+  if (site.name) {
+    txOr.push({ reason: new RegExp(escapeRegex(site.name), 'i') })
+  }
+  if (client?.name) {
+    txOr.push({ reason: new RegExp(escapeRegex(client.name), 'i') })
+  }
 
   if (fileObjectIds.length) {
     await uploadService.purgeCloudinaryForSurveyFileIds(req.user.companyId, fileObjectIds)

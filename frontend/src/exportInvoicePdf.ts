@@ -36,6 +36,8 @@ export type InvoicePdfData = {
   invoiceNumber?: string
   /** When set (e.g. SV-4006), invoice number becomes INV-4006 instead of random */
   visitId?: string
+  /** Visit date shown in the particulars table as `Date: …` (defaults to invoiceDate) */
+  visitDate?: string
   /** Shown after "Status:" — affects colour (Paid = green, otherwise red) */
   paymentStatus?: string
   /** Optional: from GET /api/settings/invoice-bank-columns */
@@ -441,9 +443,14 @@ export async function exportInvoicePdf(data: InvoicePdfData) {
     ])
   }
 
+  const invoiceDate = (data.invoiceDate ?? '').trim() || todayInvoiceDate()
+  const particularDate = (data.visitDate ?? '').trim() || invoiceDate
+  if (lineItems.length > 0) {
+    lineItems[0][1] = individualParticularCellText(lineItems[0][1], particularDate)
+  }
+
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
   const invoiceNo = (data.invoiceNumber ?? '').trim() || buildInvoiceNumber(data.visitId)
-  const invoiceDate = (data.invoiceDate ?? '').trim() || todayInvoiceDate()
   const pageWidth = doc.internal.pageSize.getWidth()
   const pageHeight = doc.internal.pageSize.getHeight()
   const left = 14
@@ -456,7 +463,6 @@ export async function exportInvoicePdf(data: InvoicePdfData) {
     title: 'INVOICE',
     invoiceNo,
     invoiceDate,
-    showInvoiceDateInHeader: false,
     paymentStatus: data.paymentStatus,
     ...co,
   })
@@ -471,11 +477,12 @@ export async function exportInvoicePdf(data: InvoicePdfData) {
   doc.setTextColor(55, 55, 55)
   doc.text(`Client Name : ${data.client || '—'}`, left, billTop + 6)
   doc.text(`Site Name : ${data.site || '—'}`, left, billTop + 12)
-  doc.text(`Invoice Date : ${invoiceDate}`, left, billTop + 18)
 
-  const tableStartY = billTop + 24
+  const tableStartY = billTop + 18
 
-  const bodyRows = lineItems.length ? lineItems : [['1', '—', '—', formatInr(0), formatInr(0)]]
+  const bodyRows = lineItems.length
+    ? lineItems
+    : [['1', individualParticularCellText('—', particularDate), '—', '—', formatInr(0)]]
   autoTable(doc, {
     startY: tableStartY,
     tableWidth: right - left,
@@ -567,6 +574,12 @@ const COMBINED_INVOICE_COL_STYLES = {
   1: { cellWidth: 58 },
   2: { cellWidth: 78 },
   3: { halign: 'right' as const, fontStyle: 'normal' as const, cellWidth: 32 },
+}
+
+/** Same `Date:` line as combined invoice site column, for the particulars column on individual invoices. */
+function individualParticularCellText(particular: string, date: string): string {
+  const label = (particular ?? '').trim() || '—'
+  return `${label}\nDate: ${date}`
 }
 
 function combinedSiteCellText(v: CombinedVisitLine): string {

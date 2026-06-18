@@ -522,13 +522,19 @@ export async function deleteVisit(req, visitId) {
   const fileObjectIds = [...fileIdSet].map((id) => new mongoose.Types.ObjectId(id))
 
   const txOr = [{ siteVisitId: vid }]
+  if (visit.siteId) txOr.push({ siteId: visit.siteId })
+  if (visit.clientId) txOr.push({ clientId: visit.clientId })
   const code = (visit.visitCode ?? '').trim()
   if (code) {
     txOr.push({
-      type: 'debit',
       reason: new RegExp(escapeRegex(code), 'i'),
     })
   }
+  // Get site name and client name
+  const site = await Site.findOne({ _id: visit.siteId, companyId: req.user.companyId }).select('name').lean()
+  const client = await Client.findOne({ _id: visit.clientId, companyId: req.user.companyId }).select('name').lean()
+  if (site?.name) txOr.push({ reason: new RegExp(escapeRegex(site.name), 'i') })
+  if (client?.name) txOr.push({ reason: new RegExp(escapeRegex(client.name), 'i') })
   if (fileObjectIds.length) {
     await uploadService.purgeCloudinaryForSurveyFileIds(req.user.companyId, fileObjectIds)
   }

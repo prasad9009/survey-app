@@ -25,10 +25,12 @@
     "dev:backend": "npm run dev -w backend",
     "build": "npm run build -w frontend",
     "preview": "npm run preview -w frontend",
-    "start": "npm run start -w backend"
+    "start": "npm run start -w backend",
+    "cypress:open": "cypress open",
+    "cypress:run": "cypress run"
   },
   "devDependencies": {
-    "concurrently": "^9.2.1",
+    "concurrently": "^10.0.3",
     "cypress": "^15.16.0"
   },
   "engines": {

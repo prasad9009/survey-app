@@ -422,11 +422,12 @@ export async function deleteClientWithSites(req, clientId) {
     _id: clientId,
     companyId: req.user.companyId,
     ...(await sharedInstrumentOperationalScope(req)),
-  }).select('_id')
+  }).select('_id name')
   if (!client) throw new ApiError(404, 'Client not found')
 
-  const sites = await Site.find({ clientId: client._id, companyId: req.user.companyId }).select('_id').lean()
+  const sites = await Site.find({ clientId: client._id, companyId: req.user.companyId }).select('_id name').lean()
   const siteIds = sites.map((s) => s._id)
+  const siteNames = sites.map((s) => s.name)
 
   const visits = await SiteVisit.find({ clientId: client._id, companyId: req.user.companyId })
     .select('_id photoFileIds photoUrls')
@@ -449,6 +450,14 @@ export async function deleteClientWithSites(req, clientId) {
   const txOr = [{ clientId: client._id }]
   if (siteIds.length) txOr.push({ siteId: { $in: siteIds } })
   if (visitIds.length) txOr.push({ siteVisitId: { $in: visitIds } })
+  if (client.name) {
+    txOr.push({ reason: new RegExp(escapeRegex(client.name), 'i') })
+  }
+  for (const siteName of siteNames) {
+    if (siteName) {
+      txOr.push({ reason: new RegExp(escapeRegex(siteName), 'i') })
+    }
+  }
 
   if (fileObjectIds.length) {
     await uploadService.purgeCloudinaryForSurveyFileIds(req.user.companyId, fileObjectIds)
