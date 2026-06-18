@@ -79,6 +79,7 @@ export function EditSiteVisitModal({ open, initial, onClose, onSaved }: EditSite
   const [billingLines, setBillingLines] = useState<BillingLineDraft[]>(() => billingLinesToDraft())
   const [billingOtherCharges, setBillingOtherCharges] = useState('0')
   const [showDrawingFields, setShowDrawingFields] = useState(true)
+  const [disableToggle, setDisableToggle] = useState(false)
   const [saving, setSaving] = useState(false)
   const savingRef = useRef(false)
 
@@ -90,11 +91,20 @@ export function EditSiteVisitModal({ open, initial, onClose, onSaved }: EditSite
     setDwgNo(initial.dwgNo ?? '')
     setMachine(initial.machine ?? 'Total Station')
     setNotes(initial.notes ?? '')
-    setPaymentMode(initial.paymentMode ?? '�')
+    setPaymentMode(initial.paymentMode ?? '')
     const status = (initial.paymentStatus ?? 'pending').toLowerCase()
     setPaymentStatus(status === 'paid' || status === 'partial' || status === 'waived' ? status : 'pending')
     setBillingLines(billingLinesToDraft(initial.billingLines))
     setBillingOtherCharges(String(initial.billingOtherCharges ?? 0))
+
+    const hasDwgInfo = Boolean(
+      (initial.engineerName ?? '').trim() ||
+      (initial.dwgRefBy ?? '').trim() ||
+      (initial.dwgNo ?? '').trim() ||
+      (initial.machine && initial.machine.trim() !== '' && initial.machine !== '—' && initial.machine !== 'Total Station')
+    )
+    setShowDrawingFields(hasDwgInfo)
+    setDisableToggle(!hasDwgInfo)
   }, [open, initial])
 
   const amountRupees = useMemo(() => {
@@ -171,13 +181,20 @@ export function EditSiteVisitModal({ open, initial, onClose, onSaved }: EditSite
                 <span className="text-xs font-bold text-neutral-800">
                   Include Engg & Drawing Details
                 </span>
+                {disableToggle && (
+                  <p className="text-[10px] font-semibold text-neutral-400">
+                    Locked off: details not included on creation
+                  </p>
+                )}
               </div>
               <button
                 type="button"
+                disabled={disableToggle}
                 onClick={() => setShowDrawingFields(!showDrawingFields)}
                 className={[
                   'relative inline-flex h-5 w-10 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-[#f39b03]/30 focus:ring-offset-2',
                   showDrawingFields ? 'bg-[#f39b03]' : 'bg-neutral-200',
+                  disableToggle ? 'opacity-50 cursor-not-allowed' : '',
                 ].join(' ')}
                 role="switch"
                 aria-checked={showDrawingFields}

@@ -1295,13 +1295,17 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
               {isVisitMode ? (
                 <CardShell title="Visit Details" className="overflow-hidden" bodyClassName="p-0">
                   <div className="grid grid-cols-1 gap-3 p-4 text-sm font-semibold text-neutral-700 sm:grid-cols-2 sm:px-6 sm:py-5">
-                    <p>
-                      <span className="text-neutral-500">Inst. make:</span> {effectiveInstMake}
-                    </p>
-                    <p>
-                      <span className="text-neutral-500">DWG Ref. By:</span>{' '}
-                      {visitDetailFromApi?.dwgRefBy?.trim() || '—'}
-                    </p>
+                    {effectiveInstMake && effectiveInstMake !== '—' && effectiveInstMake !== '-' && (
+                      <p>
+                        <span className="text-neutral-500">Inst. make:</span> {effectiveInstMake}
+                      </p>
+                    )}
+                    {visitDetailFromApi?.dwgRefBy?.trim() ? (
+                      <p>
+                        <span className="text-neutral-500">DWG Ref. By:</span>{' '}
+                        {visitDetailFromApi.dwgRefBy}
+                      </p>
+                    ) : null}
                     <p>
                       <span className="text-neutral-500">Payment Mode:</span> {effectivePaymentMode}
                     </p>
@@ -1311,10 +1315,12 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
                     <p className="sm:col-span-2">
                       <span className="text-neutral-500">Notes:</span> {effectiveNotes}
                     </p>
-                    <p>
-                      <span className="text-neutral-500">DWG No.:</span>{' '}
-                      {visitDetailFromApi?.dwgNo?.trim() || '—'}
-                    </p>
+                    {visitDetailFromApi?.dwgNo?.trim() ? (
+                      <p>
+                        <span className="text-neutral-500">DWG No.:</span>{' '}
+                        {visitDetailFromApi.dwgNo}
+                      </p>
+                    ) : null}
                     <p className="sm:col-span-2">
                       <span className="text-neutral-500">Particulars:</span>{' '}
                       {formatBillingLinesForDisplay(

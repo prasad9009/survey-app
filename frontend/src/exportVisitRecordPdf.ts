@@ -203,7 +203,7 @@ export async function exportVisitRecordPdf(data: VisitRecordPdfData) {
   y += rowGap
   doc.text('Contact Person :', leftLabel, y)
   lineValue(doc, leftValueStart, 200, y, data.contactPerson ?? '-')
-  doc.text('Ph. :', 212, y)
+  doc.text('Site Phone :', 204, y)
   lineValue(doc, 228, 286, y, data.phone ?? '-')
 
   const hasDwgInfo = Boolean((data.dwgRefBy ?? '').trim() || (data.dwgNo ?? '').trim())
