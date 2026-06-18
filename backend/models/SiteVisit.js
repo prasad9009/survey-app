@@ -23,6 +23,7 @@ const siteVisitSchema = new Schema(
     contactPerson: { type: String, trim: true },
     workDescription: { type: String, trim: true },
     machineLabel: { type: String, trim: true },
+    includeDrawingDetails: { type: Boolean },
     /** Multiple billing line items: qty × rate, or a fixed line amount when qty/rate are not used. */
     billingLines: [
       {

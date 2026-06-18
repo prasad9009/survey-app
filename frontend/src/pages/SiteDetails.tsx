@@ -116,6 +116,7 @@ type SiteVisitRecord = {
   billingOtherCharges?: number
   dwgRefBy?: string
   dwgNo?: string
+  includeDrawingDetails?: boolean
 }
 
 type PendingIndividualInvoice = {
@@ -158,6 +159,7 @@ function visitDtoToSiteRecord(v: VisitDto): SiteVisitRecord {
     billingOtherCharges: v.billingOtherCharges,
     dwgRefBy: v.dwgRefBy,
     dwgNo: v.dwgNo,
+    includeDrawingDetails: v.includeDrawingDetails,
   }
 }
 
@@ -241,6 +243,7 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
     dwgRefBy?: string
     dwgNo?: string
     instMake?: string
+    includeDrawingDetails?: boolean
   } | null>(null)
   const [editVisitOpen, setEditVisitOpen] = useState(false)
   const [editVisitInitial, setEditVisitInitial] = useState<EditSiteVisitInitial | null>(null)
@@ -279,6 +282,7 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
           photoUrls?: string[]
           billingLines?: InvoicePdfBillingLine[]
           billingOtherCharges?: number
+          includeDrawingDetails?: boolean
         }
       }>(`/api/visits/${visitMongoId}`, { params: { _t: Date.now() } })
       if (!res.data?.ok || !res.data.visit) return
@@ -306,6 +310,7 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
         dwgRefBy: v.dwgRefBy,
         dwgNo: v.dwgNo,
         instMake: v.instMake,
+        includeDrawingDetails: v.includeDrawingDetails,
       })
     } catch {
       setVisitPhotoUrls([])
@@ -788,6 +793,7 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
       paymentStatus: record?.paymentStatus ?? effectivePaymentStatus,
       billingLines: record?.billingLines ?? visitBillingForInvoice.billingLines,
       billingOtherCharges: record?.billingOtherCharges ?? visitBillingForInvoice.billingOtherCharges,
+      includeDrawingDetails: record?.includeDrawingDetails ?? visitDetailFromApi?.includeDrawingDetails,
     })
     setEditVisitOpen(true)
   }
@@ -869,6 +875,7 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
         ),
         engineerName: reportEngineer || '-',
         photoUrls: photos,
+        includeDrawingDetails: record.includeDrawingDetails ?? visitDetailFromApi?.includeDrawingDetails,
       }),
     )
     })

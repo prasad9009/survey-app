@@ -157,6 +157,14 @@ function visitInstrumentIdString(v) {
 }
 
 function serializeVisitRow(v, visitNo) {
+  const hasDwgInfo = Boolean(
+    (v.engineerName ?? '').trim() ||
+    (v.dwgRefBy ?? '').trim() ||
+    (v.dwgNo ?? '').trim() ||
+    (v.machineLabel && v.machineLabel.trim() !== '' && v.machineLabel !== '—' && v.machineLabel !== 'Total Station')
+  )
+  const includeDrawingDetails = typeof v.includeDrawingDetails === 'boolean' ? v.includeDrawingDetails : hasDwgInfo
+
   return {
     id: v.visitCode || v._id.toString(),
     _id: v._id.toString(),
@@ -177,6 +185,7 @@ function serializeVisitRow(v, visitNo) {
     photoUrls: v.photoUrls ?? [],
     billingLines: serializeBillingLines(v.billingLines),
     billingOtherCharges: Number.isFinite(Number(v.billingOtherCharges)) ? Number(v.billingOtherCharges) : 0,
+    includeDrawingDetails,
     ...visitReportFields(v),
   }
 }
@@ -227,7 +236,7 @@ export async function listVisits(req) {
   const { limit, skip, paginated } = parsePagination(req.query, { defaultLimit: 200, maxLimit: 200 })
   const baseQuery = SiteVisit.find(match)
     .select(
-      'visitCode visitNo visitDate machineLabel workDescription amount paymentStatus paidAmount paymentMode notes photoUrls billingLines billingOtherCharges clientId siteId siteAddress sitePhone engineerName contactPerson dwgRefBy dwgNo instrumentId',
+      'visitCode visitNo visitDate machineLabel includeDrawingDetails workDescription amount paymentStatus paidAmount paymentMode notes photoUrls billingLines billingOtherCharges clientId siteId siteAddress sitePhone engineerName contactPerson dwgRefBy dwgNo instrumentId',
     )
     .sort({ visitDate: -1 })
     .populate('clientId', 'name')
@@ -308,6 +317,7 @@ export async function createVisit(req, body, { preUploadedPhotos } = {}) {
     contactPerson: contactPerson || undefined,
     workDescription: (body.workDescription?.trim() || billingParticularOut || '').slice(0, 500) || undefined,
     machineLabel: body.machineLabel?.trim(),
+    includeDrawingDetails: typeof body.includeDrawingDetails === 'boolean' ? body.includeDrawingDetails : true,
     billingLines: billingLinesToStore,
     billingParticular: billingParticularOut,
     billingQuantity: billingQuantityOut,
@@ -391,6 +401,7 @@ export async function updateVisit(req, visitId, body) {
   if (typeof body.contactPerson === 'string') visit.contactPerson = body.contactPerson.trim()
   if (typeof body.workDescription === 'string') visit.workDescription = body.workDescription.trim()
   if (typeof body.machineLabel === 'string') visit.machineLabel = body.machineLabel.trim()
+  if (typeof body.includeDrawingDetails === 'boolean') visit.includeDrawingDetails = body.includeDrawingDetails
   if (typeof body.notes === 'string') visit.notes = body.notes.trim()
   if (typeof body.paymentMode === 'string') visit.paymentMode = body.paymentMode.trim()
 

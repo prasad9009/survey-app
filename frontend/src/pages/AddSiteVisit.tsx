@@ -988,6 +988,7 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
                         paymentMode: '—',
                         paymentStatus: 'pending',
                         notes,
+                        includeDrawingDetails: showDrawingFields,
                       }
 
                       type VisitCreateRes = {

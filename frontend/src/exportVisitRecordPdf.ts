@@ -36,6 +36,7 @@ export type VisitRecordPdfData = {
   engineerName?: string
   /** HTTPS image URLs (e.g. Cloudinary); rendered on PDF page 2+ */
   photoUrls?: string[]
+  includeDrawingDetails?: boolean
 }
 
 async function loadImageAsDataUrl(src: string) {
@@ -206,7 +207,7 @@ export async function exportVisitRecordPdf(data: VisitRecordPdfData) {
   doc.text('Site Phone :', 204, y)
   lineValue(doc, 228, 286, y, data.phone ?? '-')
 
-  const hasDwgInfo = Boolean((data.dwgRefBy ?? '').trim() || (data.dwgNo ?? '').trim())
+  const hasDwgInfo = data.includeDrawingDetails !== false && Boolean((data.dwgRefBy ?? '').trim() || (data.dwgNo ?? '').trim())
   if (hasDwgInfo) {
     y += rowGap
     doc.text('DWG. Ref. By :', leftLabel, y)
@@ -216,7 +217,7 @@ export async function exportVisitRecordPdf(data: VisitRecordPdfData) {
   }
 
   const instMakeClean = (data.instMake ?? data.machine ?? '').trim()
-  const hasInstOrEngg = Boolean(
+  const hasInstOrEngg = data.includeDrawingDetails !== false && Boolean(
     (instMakeClean && instMakeClean !== '-' && instMakeClean !== '—') ||
     (data.engineerName ?? '').trim()
   )

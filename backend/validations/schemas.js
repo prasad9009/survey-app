@@ -96,6 +96,7 @@ export const createVisitSchema = z.object({
   contactPerson: z.string().max(200).optional(),
   workDescription: z.string().max(5000).optional(),
   machineLabel: z.string().max(200).optional(),
+  includeDrawingDetails: z.boolean().optional(),
   /** When non-empty, server computes amount from these lines + billingOtherCharges. */
   billingLines: z.array(billingLineSchema).max(40).optional(),
   billingParticular: z.string().max(500).optional(),

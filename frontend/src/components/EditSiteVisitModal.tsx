@@ -38,6 +38,7 @@ export type EditSiteVisitInitial = {
   paymentStatus?: string
   billingLines?: InvoicePdfBillingLine[]
   billingOtherCharges?: number
+  includeDrawingDetails?: boolean
 }
 
 type EditSiteVisitModalProps = {
@@ -97,12 +98,14 @@ export function EditSiteVisitModal({ open, initial, onClose, onSaved }: EditSite
     setBillingLines(billingLinesToDraft(initial.billingLines))
     setBillingOtherCharges(String(initial.billingOtherCharges ?? 0))
 
-    const hasDwgInfo = Boolean(
-      (initial.engineerName ?? '').trim() ||
-      (initial.dwgRefBy ?? '').trim() ||
-      (initial.dwgNo ?? '').trim() ||
-      (initial.machine && initial.machine.trim() !== '' && initial.machine !== '—' && initial.machine !== 'Total Station')
-    )
+    const hasDwgInfo = typeof initial.includeDrawingDetails === 'boolean'
+      ? initial.includeDrawingDetails
+      : Boolean(
+          (initial.engineerName ?? '').trim() ||
+          (initial.dwgRefBy ?? '').trim() ||
+          (initial.dwgNo ?? '').trim() ||
+          (initial.machine && initial.machine.trim() !== '' && initial.machine !== '—' && initial.machine !== 'Total Station')
+        )
     setShowDrawingFields(hasDwgInfo)
     setDisableToggle(!hasDwgInfo)
   }, [open, initial])
@@ -136,6 +139,7 @@ export function EditSiteVisitModal({ open, initial, onClose, onSaved }: EditSite
         dwgRefBy: showDrawingFields ? dwgRefBy.trim() : '',
         dwgNo: showDrawingFields ? dwgNo.trim() : '',
         machineLabel: showDrawingFields ? machine : '',
+        includeDrawingDetails: showDrawingFields,
         workDescription: notes, notes: notes.trim(), paymentMode: paymentMode.trim(), paymentStatus,
         billingLines: billingLines.map((line) => {
           const q = parseFloat(line.quantity.replace(/[^\d.-]/g, '')) || 0

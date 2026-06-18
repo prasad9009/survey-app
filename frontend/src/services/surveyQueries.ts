@@ -108,6 +108,7 @@ export type VisitDto = {
     amount?: number
   }>
   billingOtherCharges?: number
+  includeDrawingDetails?: boolean
 }
 
 export async function fetchVisits(year: string, instrumentId: string | null | undefined) {
