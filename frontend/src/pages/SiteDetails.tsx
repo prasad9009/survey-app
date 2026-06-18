@@ -783,14 +783,14 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
     setEditVisitInitial({
       visitMongoId: mid,
       visitId: record?.id ?? visitId,
-      date: record?.date ?? effectiveVisitDate,
-      engineerName: record?.engineerName ?? effectiveEngineerName,
-      dwgRefBy: record?.dwgRefBy ?? visitDetailFromApi?.dwgRefBy,
-      dwgNo: record?.dwgNo ?? visitDetailFromApi?.dwgNo,
-      machine: record?.machine ?? effectiveMachine,
-      notes: record?.notes ?? effectiveNotes,
-      paymentMode: record?.paymentMode ?? effectivePaymentMode,
-      paymentStatus: record?.paymentStatus ?? effectivePaymentStatus,
+      date: record?.date ?? visitDetailFromApi?.date ?? visitDate,
+      engineerName: record?.engineerName ?? visitDetailFromApi?.engineerName ?? '',
+      dwgRefBy: record?.dwgRefBy ?? visitDetailFromApi?.dwgRefBy ?? '',
+      dwgNo: record?.dwgNo ?? visitDetailFromApi?.dwgNo ?? '',
+      machine: record?.machine ?? visitDetailFromApi?.machine ?? '',
+      notes: record?.notes ?? visitDetailFromApi?.notes ?? '',
+      paymentMode: record?.paymentMode ?? visitDetailFromApi?.paymentMode ?? '',
+      paymentStatus: record?.paymentStatus ?? visitDetailFromApi?.paymentStatus ?? 'pending',
       billingLines: record?.billingLines ?? visitBillingForInvoice.billingLines,
       billingOtherCharges: record?.billingOtherCharges ?? visitBillingForInvoice.billingOtherCharges,
       includeDrawingDetails: record?.includeDrawingDetails ?? visitDetailFromApi?.includeDrawingDetails,
@@ -842,6 +842,7 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
     dwgRefBy?: string
     dwgNo?: string
     photoUrls?: string[]
+    includeDrawingDetails?: boolean
   }) => {
     void exportLock.run(async () => {
     const photos = record.photoUrls?.length ? record.photoUrls : visitPhotoUrls
@@ -1364,6 +1365,7 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
                           dwgRefBy: visitDetailFromApi?.dwgRefBy,
                           dwgNo: visitDetailFromApi?.dwgNo,
                           billingLines: visitBillingForInvoice.billingLines,
+                          includeDrawingDetails: visitDetailFromApi?.includeDrawingDetails,
                         })
                       }
                       className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-[#f39b03] px-4 text-xs font-extrabold text-white transition hover:bg-[#e18e03] sm:text-sm"
@@ -1509,6 +1511,7 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
                                       dwgNo: record.dwgNo,
                                       billingLines: record.billingLines,
                                       photoUrls: record.photoUrls,
+                                      includeDrawingDetails: record.includeDrawingDetails,
                                     })
                                   }}
                                   className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-neutral-200 bg-white px-2.5 text-[10px] font-extrabold text-neutral-800 transition hover:bg-neutral-50"
@@ -1610,6 +1613,7 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
                                         dwgNo: record.dwgNo,
                                         billingLines: record.billingLines,
                                         photoUrls: record.photoUrls,
+                                        includeDrawingDetails: record.includeDrawingDetails,
                                       })
                                     }}
                                     className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-neutral-200 bg-white px-2.5 text-[11px] font-extrabold text-neutral-800 transition hover:bg-neutral-50"
