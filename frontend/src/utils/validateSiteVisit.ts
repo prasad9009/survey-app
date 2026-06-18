@@ -13,14 +13,17 @@ export type SiteVisitValidationInput = {
   billingLines: BillingLineInput[]
   billingOtherCharges: string
   amountRupees: number
+  requireMachine?: boolean
 }
 
 export function validateSiteVisitForm(input: SiteVisitValidationInput): string | null {
   if (!input.client.trim()) return 'Please select a client.'
   if (!input.site.trim()) return 'Please select a site.'
   if (!input.siteAddress.trim()) return 'Please enter the site address.'
-  if (!input.machine.trim() || input.machine === '—') {
-    return 'Instrument make is not set for this site. Link an instrument to the site first.'
+  if (input.requireMachine !== false) {
+    if (!input.machine.trim() || input.machine === '—') {
+      return 'Instrument make is not set for this site. Link an instrument to the site first.'
+    }
   }
 
   const hasBillingLine = input.billingLines.some((line) => {

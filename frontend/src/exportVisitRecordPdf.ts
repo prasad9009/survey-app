@@ -206,18 +206,28 @@ export async function exportVisitRecordPdf(data: VisitRecordPdfData) {
   doc.text('Ph. :', 212, y)
   lineValue(doc, 228, 286, y, data.phone ?? '-')
 
-  y += rowGap
-  doc.text('DWG. Ref. By :', leftLabel, y)
-  lineValue(doc, leftValueStart, 138, y, (data.dwgRefBy ?? '').trim() || '-')
-  doc.text('DWG. No. :', 142, y)
-  lineValue(doc, 168, 286, y, (data.dwgNo ?? '').trim() || '-')
+  const hasDwgInfo = Boolean((data.dwgRefBy ?? '').trim() || (data.dwgNo ?? '').trim())
+  if (hasDwgInfo) {
+    y += rowGap
+    doc.text('DWG. Ref. By :', leftLabel, y)
+    lineValue(doc, leftValueStart, 138, y, (data.dwgRefBy ?? '').trim() || '-')
+    doc.text('DWG. No. :', 142, y)
+    lineValue(doc, 168, 286, y, (data.dwgNo ?? '').trim() || '-')
+  }
 
-  y += rowGap
-  const instMake = (data.instMake ?? data.machine ?? '').trim() || '-'
-  doc.text('Inst Make :', leftLabel, y)
-  lineValue(doc, leftValueStart, 152, y, instMake)
-  doc.text('Engg. Name :', 157, y)
-  lineValue(doc, 184, 286, y, data.engineerName ?? '-')
+  const instMakeClean = (data.instMake ?? data.machine ?? '').trim()
+  const hasInstOrEngg = Boolean(
+    (instMakeClean && instMakeClean !== '-' && instMakeClean !== '—') ||
+    (data.engineerName ?? '').trim()
+  )
+  if (hasInstOrEngg) {
+    y += rowGap
+    const instMake = instMakeClean || '-'
+    doc.text('Inst Make :', leftLabel, y)
+    lineValue(doc, leftValueStart, 152, y, instMake)
+    doc.text('Engg. Name :', 157, y)
+    lineValue(doc, 184, 286, y, data.engineerName ?? '-')
+  }
 
   y += rowGap
   doc.text('Work Type :', leftLabel, y)

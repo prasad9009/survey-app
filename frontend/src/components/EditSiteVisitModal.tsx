@@ -78,6 +78,7 @@ export function EditSiteVisitModal({ open, initial, onClose, onSaved }: EditSite
   const [paymentStatus, setPaymentStatus] = useState('pending')
   const [billingLines, setBillingLines] = useState<BillingLineDraft[]>(() => billingLinesToDraft())
   const [billingOtherCharges, setBillingOtherCharges] = useState('0')
+  const [showDrawingFields, setShowDrawingFields] = useState(true)
   const [saving, setSaving] = useState(false)
   const savingRef = useRef(false)
 
@@ -113,13 +114,18 @@ export function EditSiteVisitModal({ open, initial, onClose, onSaved }: EditSite
     if (savingRef.current) return
     const validationError = validateSiteVisitForm({
       client: 'x', site: 'x', siteAddress: 'x', machine, billingLines, billingOtherCharges, amountRupees,
+      requireMachine: showDrawingFields,
     })
     if (validationError) { toast.error(validationError); return }
     savingRef.current = true
     setSaving(true)
     try {
       const res = await http.put<{ ok: boolean; error?: string }>(`/api/site-visits/${initial.visitMongoId}`, {
-        visitDate, engineerName: engineerName.trim(), dwgRefBy: dwgRefBy.trim(), dwgNo: dwgNo.trim(), machineLabel: machine,
+        visitDate,
+        engineerName: showDrawingFields ? engineerName.trim() : '',
+        dwgRefBy: showDrawingFields ? dwgRefBy.trim() : '',
+        dwgNo: showDrawingFields ? dwgNo.trim() : '',
+        machineLabel: showDrawingFields ? machine : '',
         workDescription: notes, notes: notes.trim(), paymentMode: paymentMode.trim(), paymentStatus,
         billingLines: billingLines.map((line) => {
           const q = parseFloat(line.quantity.replace(/[^\d.-]/g, '')) || 0
@@ -158,10 +164,42 @@ export function EditSiteVisitModal({ open, initial, onClose, onSaved }: EditSite
         <form onSubmit={handleSubmit} className="flex flex-1 flex-col overflow-hidden">
           <div className="flex-1 space-y-3 overflow-y-auto px-4 py-3">
             <label className="grid gap-1"><span className="text-xs font-bold text-neutral-700">Visit Date</span><input type="date" value={visitDate} onChange={(e) => setVisitDate(e.target.value)} className={fieldClass} /></label>
-            <label className="grid gap-1"><span className="text-xs font-bold text-neutral-700">Engg. Name</span><input value={engineerName} onChange={(e) => setEngineerName(e.target.value)} className={fieldClass} placeholder="Engineer name" /></label>
-            <label className="grid gap-1"><span className="text-xs font-bold text-neutral-700">DWG Ref. By</span><input value={dwgRefBy} onChange={(e) => setDwgRefBy(e.target.value)} className={fieldClass} placeholder="Enter DWG reference by" /></label>
-            <label className="grid gap-1"><span className="text-xs font-bold text-neutral-700">DWG No.</span><input value={dwgNo} onChange={(e) => setDwgNo(e.target.value)} className={fieldClass} placeholder="Enter DWG number" /></label>
-            <label className="grid gap-1"><span className="text-xs font-bold text-neutral-700">Machine</span><input value={machine} onChange={(e) => setMachine(e.target.value)} className={fieldClass} /></label>
+
+            {/* Form Toggle Switch */}
+            <div className="flex items-center justify-between gap-3 rounded-xl border border-neutral-200/80 bg-neutral-50/50 p-3 transition-all hover:bg-neutral-50">
+              <div className="space-y-0.5">
+                <span className="text-xs font-bold text-neutral-800">
+                  Include Engg & Drawing Details
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowDrawingFields(!showDrawingFields)}
+                className={[
+                  'relative inline-flex h-5 w-10 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-[#f39b03]/30 focus:ring-offset-2',
+                  showDrawingFields ? 'bg-[#f39b03]' : 'bg-neutral-200',
+                ].join(' ')}
+                role="switch"
+                aria-checked={showDrawingFields}
+              >
+                <span
+                  aria-hidden="true"
+                  className={[
+                    'pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out',
+                    showDrawingFields ? 'translate-x-5' : 'translate-x-0',
+                  ].join(' ')}
+                />
+              </button>
+            </div>
+
+            {showDrawingFields && (
+              <>
+                <label className="grid gap-1"><span className="text-xs font-bold text-neutral-700">Engg. Name</span><input value={engineerName} onChange={(e) => setEngineerName(e.target.value)} className={fieldClass} placeholder="Engineer name" /></label>
+                <label className="grid gap-1"><span className="text-xs font-bold text-neutral-700">DWG Ref. By</span><input value={dwgRefBy} onChange={(e) => setDwgRefBy(e.target.value)} className={fieldClass} placeholder="Enter DWG reference by" /></label>
+                <label className="grid gap-1"><span className="text-xs font-bold text-neutral-700">DWG No.</span><input value={dwgNo} onChange={(e) => setDwgNo(e.target.value)} className={fieldClass} placeholder="Enter DWG number" /></label>
+                <label className="grid gap-1"><span className="text-xs font-bold text-neutral-700">Machine</span><input value={machine} onChange={(e) => setMachine(e.target.value)} className={fieldClass} /></label>
+              </>
+            )}
             <label className="grid gap-1"><span className="text-xs font-bold text-neutral-700">Payment mode</span><input value={paymentMode} onChange={(e) => setPaymentMode(e.target.value)} className={fieldClass} /></label>
             <label className="grid gap-1"><span className="text-xs font-bold text-neutral-700">Payment status</span><AppSelect value={paymentStatus} onChange={setPaymentStatus} className={fieldClass} options={[{ value: 'pending', label: 'Pending' }, { value: 'partial', label: 'Partial' }, { value: 'paid', label: 'Paid' }, { value: 'waived', label: 'Waived' }]} /></label>
             {billingLines.map((line, idx) => (

@@ -158,6 +158,7 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
   const [engineerName, setEngineerName] = useState('')
   const [dwgRefBy, setDwgRefBy] = useState('')
   const [dwgNo, setDwgNo] = useState('')
+  const [showDrawingFields, setShowDrawingFields] = useState(true)
   const [siteAddress, setSiteAddress] = useState('')
   const [sitePhone, setSitePhone] = useState('')
   const [billingLines, setBillingLines] = useState<BillingLineDraft[]>(() => defaultBillingLines())
@@ -945,6 +946,7 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
                       billingLines,
                       billingOtherCharges,
                       amountRupees,
+                      requireMachine: showDrawingFields,
                     })
                     if (validationError) {
                       toast.error(validationError)
@@ -962,11 +964,11 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
                         siteId: match.id,
                         siteAddress: siteAddress.trim(),
                         sitePhone: sitePhone.trim(),
-                        engineerName: engineerName.trim(),
-                        dwgRefBy: dwgRefBy.trim() || undefined,
-                        dwgNo: dwgNo.trim() || undefined,
-                        contactPerson: engineerName.trim(),
-                        machineLabel: machine,
+                        engineerName: showDrawingFields ? engineerName.trim() : '',
+                        dwgRefBy: showDrawingFields ? (dwgRefBy.trim() || undefined) : undefined,
+                        dwgNo: showDrawingFields ? (dwgNo.trim() || undefined) : undefined,
+                        contactPerson: showDrawingFields ? engineerName.trim() : '',
+                        machineLabel: showDrawingFields ? machine : '',
                         billingLines: billingLines.map((line) => {
                           const q = parseFloat(line.quantity.replace(/[^\d.-]/g, '')) || 0
                           const r = parseFloat(line.rate.replace(/[^\d.-]/g, '')) || 0
@@ -1057,6 +1059,36 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
                     Core information for this survey visit.
                   </p>
 
+                  {/* Premium Form Toggle Switch */}
+                  <div className="mb-6 flex items-center justify-between gap-4 rounded-2xl border border-neutral-200/80 bg-neutral-50/50 p-4 transition-all hover:bg-neutral-50">
+                    <div className="space-y-0.5">
+                      <span className="text-xs font-bold text-neutral-800 sm:text-sm">
+                        Include Engineering & Drawing Details
+                      </span>
+                      <p className="text-[11px] font-medium text-neutral-500 sm:text-xs">
+                        Toggle to show or hide fields like Inst make, Engg Name, and Drawing reference numbers.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setShowDrawingFields(!showDrawingFields)}
+                      className={[
+                        'relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-[#f39b03]/30 focus:ring-offset-2',
+                        showDrawingFields ? 'bg-[#f39b03]' : 'bg-neutral-200',
+                      ].join(' ')}
+                      role="switch"
+                      aria-checked={showDrawingFields}
+                    >
+                      <span
+                        aria-hidden="true"
+                        className={[
+                          'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out',
+                          showDrawingFields ? 'translate-x-5' : 'translate-x-0',
+                        ].join(' ')}
+                      />
+                    </button>
+                  </div>
+
                   <div className="grid grid-cols-1 gap-5 md:grid-cols-2 md:gap-6">
                     <label className="grid gap-2">
                       <span className="text-xs font-bold text-neutral-700">Client</span>
@@ -1101,16 +1133,18 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
                       </div>
                     </label>
 
-                    <label className="grid gap-2">
-                      <span className="text-xs font-bold text-neutral-700">Inst. make</span>
-                      <input
-                        type="text"
-                        readOnly
-                        value={machine}
-                        title="Fetched from the instrument linked to this site"
-                        className="h-11 w-full cursor-default rounded-xl border border-neutral-200 bg-neutral-50 px-3 text-sm font-semibold text-neutral-800 outline-none"
-                      />
-                    </label>
+                    {showDrawingFields && (
+                      <label className="grid gap-2">
+                        <span className="text-xs font-bold text-neutral-700">Inst. make</span>
+                        <input
+                          type="text"
+                          readOnly
+                          value={machine}
+                          title="Fetched from the instrument linked to this site"
+                          className="h-11 w-full cursor-default rounded-xl border border-neutral-200 bg-neutral-50 px-3 text-sm font-semibold text-neutral-800 outline-none"
+                        />
+                      </label>
+                    )}
 
                     <label className="grid gap-2 md:col-span-2">
                       <span className="text-xs font-bold text-neutral-700">Site address</span>
@@ -1133,35 +1167,39 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
                       />
                     </label>
 
-                    <label className="grid gap-2">
-                      <span className="text-xs font-bold text-neutral-700">Engg. Name</span>
-                      <input
-                        value={engineerName}
-                        onChange={(e) => setEngineerName(e.target.value)}
-                        placeholder="Enter engineer name"
-                        className="h-11 w-full rounded-xl border border-neutral-200 bg-white px-3 text-sm font-semibold text-neutral-900 outline-none transition focus:border-[#f39b03]/80 focus:ring-2 focus:ring-[#f39b03]/20"
-                      />
-                    </label>
+                    {showDrawingFields && (
+                      <>
+                        <label className="grid gap-2">
+                          <span className="text-xs font-bold text-neutral-700">Engg. Name</span>
+                          <input
+                            value={engineerName}
+                            onChange={(e) => setEngineerName(e.target.value)}
+                            placeholder="Enter engineer name"
+                            className="h-11 w-full rounded-xl border border-neutral-200 bg-white px-3 text-sm font-semibold text-neutral-900 outline-none transition focus:border-[#f39b03]/80 focus:ring-2 focus:ring-[#f39b03]/20"
+                          />
+                        </label>
 
-                    <label className="grid gap-2">
-                      <span className="text-xs font-bold text-neutral-700">DWG Ref. By</span>
-                      <input
-                        value={dwgRefBy}
-                        onChange={(e) => setDwgRefBy(e.target.value)}
-                        placeholder="Enter DWG reference authority"
-                        className="h-11 w-full rounded-xl border border-neutral-200 bg-white px-3 text-sm font-semibold text-neutral-900 outline-none transition focus:border-[#f39b03]/80 focus:ring-2 focus:ring-[#f39b03]/20"
-                      />
-                    </label>
+                        <label className="grid gap-2">
+                          <span className="text-xs font-bold text-neutral-700">DWG Ref. By</span>
+                          <input
+                            value={dwgRefBy}
+                            onChange={(e) => setDwgRefBy(e.target.value)}
+                            placeholder="Enter DWG reference authority"
+                            className="h-11 w-full rounded-xl border border-neutral-200 bg-white px-3 text-sm font-semibold text-neutral-900 outline-none transition focus:border-[#f39b03]/80 focus:ring-2 focus:ring-[#f39b03]/20"
+                          />
+                        </label>
 
-                    <label className="grid gap-2">
-                      <span className="text-xs font-bold text-neutral-700">DWG No.</span>
-                      <input
-                        value={dwgNo}
-                        onChange={(e) => setDwgNo(e.target.value)}
-                        placeholder="Enter DWG number"
-                        className="h-11 w-full rounded-xl border border-neutral-200 bg-white px-3 text-sm font-semibold text-neutral-900 outline-none transition focus:border-[#f39b03]/80 focus:ring-2 focus:ring-[#f39b03]/20"
-                      />
-                    </label>
+                        <label className="grid gap-2">
+                          <span className="text-xs font-bold text-neutral-700">DWG No.</span>
+                          <input
+                            value={dwgNo}
+                            onChange={(e) => setDwgNo(e.target.value)}
+                            placeholder="Enter DWG number"
+                            className="h-11 w-full rounded-xl border border-neutral-200 bg-white px-3 text-sm font-semibold text-neutral-900 outline-none transition focus:border-[#f39b03]/80 focus:ring-2 focus:ring-[#f39b03]/20"
+                          />
+                        </label>
+                      </>
+                    )}
 
                     <div className="grid gap-3 md:col-span-2">
                       <div className="flex flex-wrap items-end justify-between gap-2">
