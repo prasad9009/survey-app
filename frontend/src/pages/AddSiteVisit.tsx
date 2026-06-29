@@ -153,7 +153,13 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
   const [showAddForm, setShowAddForm] = useState(false)
   const [client, setClient] = useState('')
   const [site, setSite] = useState('')
-  const [visitDate] = useState(() => getHeaderDateLabel())
+  const [visitDate, setVisitDate] = useState(() => {
+    const d = new Date()
+    const year = d.getFullYear()
+    const month = String(d.getMonth() + 1).padStart(2, '0')
+    const day = String(d.getDate()).padStart(2, '0')
+    return `${year}-${month}-${day}`
+  })
   const [machine, setMachine] = useState('—')
   const [engineerName, setEngineerName] = useState('')
   const [dwgRefBy, setDwgRefBy] = useState('')
@@ -962,6 +968,7 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
                     try {
                       const visitPayload = {
                         siteId: match.id,
+                        visitDate,
                         siteAddress: siteAddress.trim(),
                         sitePhone: sitePhone.trim(),
                         engineerName: showDrawingFields ? engineerName.trim() : '',
@@ -1029,7 +1036,7 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
                         visitMongoId,
                         client,
                         name: site,
-                        date: visitDate,
+                        date: getHeaderDateLabel(new Date(visitDate + 'T00:00:00')),
                         machine,
                         amount: v.amount,
                         paymentStatus: v.paymentStatus,
@@ -1121,15 +1128,10 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
                       <span className="text-xs font-bold text-neutral-700">Visit Date</span>
                       <div className="relative">
                         <input
-                          type="text"
-                          readOnly
+                          type="date"
                           value={visitDate}
-                          className="h-11 w-full rounded-xl border border-neutral-200 bg-neutral-50 px-3 pr-10 text-sm font-semibold text-neutral-900 outline-none"
-                        />
-                        <Calendar
-                          size={16}
-                          className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[#f39b03]"
-                          aria-hidden
+                          onChange={(e) => setVisitDate(e.target.value)}
+                          className="h-11 w-full rounded-xl border border-neutral-200 bg-white px-3 pr-10 text-sm font-semibold text-neutral-900 outline-none transition focus:border-[#f39b03]/80 focus:ring-2 focus:ring-[#f39b03]/20"
                         />
                       </div>
                     </label>
