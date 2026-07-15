@@ -76,10 +76,19 @@ function normalizeBillingInput(body) {
       const q = Number.isFinite(quantity) ? quantity : 0
       const r = Number.isFinite(rate) ? rate : 0
       const flat = Number.isFinite(lineAmtRaw) ? lineAmtRaw : 0
-      const fromQtyRate = q !== 0 && r !== 0 ? q * r : 0
-      const lineValue = fromQtyRate !== 0 ? fromQtyRate : flat
+      
+      let lineValue = 0
+      if (q !== 0 && r !== 0) {
+        lineValue = q * r
+      } else if (q === 0 && r !== 0) {
+        lineValue = r
+      } else {
+        lineValue = flat
+      }
+
       if (!particular && lineValue === 0) return null
       if (q !== 0 && r !== 0) return { particular, quantity: q, rate: r }
+      if (q === 0 && r !== 0) return { particular, quantity: 0, rate: 0, amount: r }
       return { particular, quantity: 0, rate: 0, amount: flat }
     })
     .filter(Boolean)

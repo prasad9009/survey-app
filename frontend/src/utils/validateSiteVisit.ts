@@ -31,7 +31,8 @@ export function validateSiteVisitForm(input: SiteVisitValidationInput): string |
     const q = parseFloat(line.quantity.replace(/[^\d.-]/g, '')) || 0
     const r = parseFloat(line.rate.replace(/[^\d.-]/g, '')) || 0
     const flat = parseFloat(line.amount.replace(/[^\d.-]/g, '')) || 0
-    return Boolean(label) && (q * r > 0 || flat > 0)
+    const lineAmt = (q !== 0 && r !== 0) ? (q * r) : (q === 0 && r !== 0) ? r : flat
+    return Boolean(label) && lineAmt > 0
   })
 
   if (!hasBillingLine) {

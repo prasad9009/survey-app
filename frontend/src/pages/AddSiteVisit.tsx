@@ -261,6 +261,7 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
       const q = parseFloat(line.quantity.replace(/[^\d.-]/g, '')) || 0
       const r = parseFloat(line.rate.replace(/[^\d.-]/g, '')) || 0
       if (q !== 0 && r !== 0) return sum + q * r
+      if (q === 0 && r !== 0) return sum + r
       const flat = parseFloat(line.amount.replace(/[^\d.-]/g, '')) || 0
       return sum + flat
     }, 0)
@@ -983,6 +984,9 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
                           if (q !== 0 && r !== 0) {
                             return { particular: line.particular.trim(), quantity: q, rate: r }
                           }
+                          if (q === 0 && r !== 0) {
+                            return { particular: line.particular.trim(), quantity: 0, rate: 0, amount: r }
+                          }
                           return {
                             particular: line.particular.trim(),
                             quantity: 0,
@@ -1225,14 +1229,13 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
                         </button>
                       </div>
                       <p className="-mt-1 text-[11px] font-semibold text-neutral-500">
-                        Use quantity × rate for per-point work, or leave quantity and rate empty and enter a line amount
-                        for fixed fees (same style as a printed invoice).
+                        Use quantity × rate for per-point work, or make quantity 0 and enter the fixed amount in the rate input.
                       </p>
                       <div className="space-y-3 rounded-xl border border-neutral-200 bg-neutral-50/50 p-3 md:p-4">
                         {billingLines.map((line, idx) => (
                           <div
                             key={line.id}
-                            className="grid grid-cols-1 gap-3 border-b border-neutral-200/80 pb-3 last:border-b-0 last:pb-0 sm:grid-cols-[minmax(0,1fr)_80px_80px_96px_auto] sm:items-end sm:gap-3"
+                            className="grid grid-cols-1 gap-3 border-b border-neutral-200/80 pb-3 last:border-b-0 last:pb-0 sm:grid-cols-[minmax(0,1fr)_80px_80px_auto] sm:items-end sm:gap-3"
                           >
                             <label className="grid min-w-0 gap-1.5">
                               <span className="text-[10px] font-bold uppercase tracking-wide text-neutral-500">
@@ -1277,24 +1280,6 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
                                   )
                                 }}
                                 inputMode="decimal"
-                                className="h-11 w-full rounded-xl border border-neutral-200 bg-white px-3 text-sm font-semibold text-neutral-900 outline-none transition focus:border-[#f39b03]/80 focus:ring-2 focus:ring-[#f39b03]/20"
-                              />
-                            </label>
-                            <label className="grid gap-1.5">
-                              <span className="text-[10px] font-bold uppercase tracking-wide text-neutral-500">
-                                Amount (₹)
-                              </span>
-                              <input
-                                value={line.amount}
-                                onChange={(e) => {
-                                  const v = e.target.value
-                                  setBillingLines((prev) =>
-                                    prev.map((row) => (row.id === line.id ? { ...row, amount: v } : row)),
-                                  )
-                                }}
-                                inputMode="decimal"
-                                placeholder="Fixed"
-                                title="Use when this line has no quantity/rate (fixed fee)"
                                 className="h-11 w-full rounded-xl border border-neutral-200 bg-white px-3 text-sm font-semibold text-neutral-900 outline-none transition focus:border-[#f39b03]/80 focus:ring-2 focus:ring-[#f39b03]/20"
                               />
                             </label>

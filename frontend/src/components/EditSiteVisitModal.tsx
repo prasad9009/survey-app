@@ -16,13 +16,27 @@ function billingLinesToDraft(lines?: InvoicePdfBillingLine[]): BillingLineDraft[
   if (!lines?.length) {
     return [{ id: newBillingLineId(), particular: '', quantity: '1', rate: '80', amount: '' }]
   }
-  return lines.map((row) => ({
-    id: newBillingLineId(),
-    particular: row.particular ?? '',
-    quantity: row.quantity != null ? String(row.quantity) : '',
-    rate: row.rate != null ? String(row.rate) : '',
-    amount: row.amount != null ? String(row.amount) : '',
-  }))
+  return lines.map((row) => {
+    const q = row.quantity ?? 0
+    const r = row.rate ?? 0
+    const a = row.amount ?? 0
+    if (q === 0 && a !== 0) {
+      return {
+        id: newBillingLineId(),
+        particular: row.particular ?? '',
+        quantity: '0',
+        rate: String(a),
+        amount: '',
+      }
+    }
+    return {
+      id: newBillingLineId(),
+      particular: row.particular ?? '',
+      quantity: row.quantity != null ? String(row.quantity) : '',
+      rate: row.rate != null ? String(row.rate) : '',
+      amount: row.amount != null ? String(row.amount) : '',
+    }
+  })
 }
 
 export type EditSiteVisitInitial = {
@@ -115,6 +129,7 @@ export function EditSiteVisitModal({ open, initial, onClose, onSaved }: EditSite
       const q = parseFloat(line.quantity.replace(/[^\d.-]/g, '')) || 0
       const r = parseFloat(line.rate.replace(/[^\d.-]/g, '')) || 0
       if (q !== 0 && r !== 0) return sum + q * r
+      if (q === 0 && r !== 0) return sum + r
       return sum + (parseFloat(line.amount.replace(/[^\d.-]/g, '')) || 0)
     }, 0)
     return Math.round(lineSum + (parseFloat(billingOtherCharges.replace(/[^\d.-]/g, '')) || 0))
@@ -146,6 +161,7 @@ export function EditSiteVisitModal({ open, initial, onClose, onSaved }: EditSite
           const r = parseFloat(line.rate.replace(/[^\d.-]/g, '')) || 0
           const flat = parseFloat(line.amount.replace(/[^\d.-]/g, '')) || 0
           if (q !== 0 && r !== 0) return { particular: line.particular.trim(), quantity: q, rate: r }
+          if (q === 0 && r !== 0) return { particular: line.particular.trim(), quantity: 0, rate: 0, amount: r }
           return { particular: line.particular.trim(), quantity: 0, rate: 0, ...(flat > 0 ? { amount: flat } : {}) }
         }),
         billingOtherCharges: parseFloat(billingOtherCharges.replace(/[^\d.-]/g, '')) || 0,
@@ -238,10 +254,6 @@ export function EditSiteVisitModal({ open, initial, onClose, onSaved }: EditSite
                 <label className="grid gap-1">
                   <span className="text-xs font-bold text-neutral-700">Rate</span>
                   <input value={line.rate} onChange={(e) => setBillingLines((prev) => prev.map((r) => r.id === line.id ? { ...r, rate: e.target.value } : r))} placeholder="Rate" className={fieldClass} />
-                </label>
-                <label className="grid gap-1 col-span-2">
-                  <span className="text-xs font-bold text-neutral-700">Flat Amount</span>
-                  <input value={line.amount} onChange={(e) => setBillingLines((prev) => prev.map((r) => r.id === line.id ? { ...r, amount: e.target.value } : r))} placeholder="Flat amount" className={fieldClass} />
                 </label>
               </div>
             ))}
