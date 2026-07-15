@@ -87,6 +87,7 @@ const billingLineSchema = z.object({
 
 export const createVisitSchema = z.object({
   siteId: z.string().min(1),
+  visitCode: z.string().max(120).optional(),
   visitDate: z.string().optional(),
   siteAddress: z.string().max(500).optional(),
   sitePhone: z.string().max(30).optional(),
@@ -113,6 +114,7 @@ export const updateVisitSchema = createVisitSchema
   .omit({ siteId: true })
   .partial()
   .extend({
+    visitCode: z.string().max(120).optional(),
     visitDate: z.string().optional(),
     paymentMode: z.string().max(100).optional(),
     paymentStatus: z.string().max(50).optional(),

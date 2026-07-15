@@ -227,6 +227,7 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
   }>({ billingLines: [], billingOtherCharges: 0 })
   const [visitPendingForInvoice, setVisitPendingForInvoice] = useState<string | null>(null)
   const [visitDetailFromApi, setVisitDetailFromApi] = useState<{
+    visitCode?: string
     visitNo?: number
     date?: string
     machine?: string
@@ -263,6 +264,7 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
       const res = await http.get<{
         ok: boolean
         visit?: {
+          id?: string
           visitNo?: number
           date?: string
           machine?: string
@@ -294,6 +296,7 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
       })
       setVisitPendingForInvoice(v.pendingAmount ?? null)
       setVisitDetailFromApi({
+        visitCode: v.id,
         visitNo: v.visitNo,
         date: v.date,
         machine: v.machine,
@@ -380,6 +383,7 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
   const effectivePaymentStatus = visitDetailFromApi?.paymentStatus?.trim() || paymentStatus
   const effectiveNotes = visitDetailFromApi?.notes?.trim() || notes
   const effectiveWork = visitDetailFromApi?.work?.trim() || work
+  const effectiveVisitId = visitDetailFromApi?.visitCode?.trim() || visitId
 
   const relatedVisitRecords = useMemo(() => {
     if (isVisitMode || !visitsQuery.data) return []
@@ -719,9 +723,9 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
         : parseVisitAmount(effectiveAmount)
     const hasBilling = visitBillingForInvoice.billingLines.length > 0
     openIndividualInvoice({
-      visitId: visitId !== '-' ? visitId : undefined,
+      visitId: effectiveVisitId !== '-' ? effectiveVisitId : undefined,
       visitDate: effectiveVisitDate !== '-' ? effectiveVisitDate : undefined,
-      siteLine: `${siteAddressLine} (Visit ${visitId})`,
+      siteLine: `${siteAddressLine} (Visit ${effectiveVisitId})`,
       workType: effectiveMachine,
       totalPoints: 1,
       ratePerPoint: pendingForVisit > 0 ? pendingForVisit : 0,
@@ -782,7 +786,8 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
     }
     setEditVisitInitial({
       visitMongoId: mid,
-      visitId: record?.id ?? visitId,
+      visitId: record?.id ?? effectiveVisitId,
+      visitCode: record?.id ?? effectiveVisitId,
       date: record?.date ?? visitDetailFromApi?.date ?? visitDate,
       engineerName: record?.engineerName ?? visitDetailFromApi?.engineerName ?? '',
       dwgRefBy: record?.dwgRefBy ?? visitDetailFromApi?.dwgRefBy ?? '',
@@ -1351,7 +1356,7 @@ export function SiteDetails({ onNavigate }: SiteDetailsProps) {
                       type="button"
                       onClick={() =>
                         handleExportVisitPdf({
-                          visitId,
+                          visitId: effectiveVisitId,
                           visitNo: effectiveVisitNo,
                           date: effectiveVisitDate,
                           machine: effectiveMachine,

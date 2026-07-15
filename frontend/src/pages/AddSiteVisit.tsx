@@ -160,6 +160,7 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
     const day = String(d.getDate()).padStart(2, '0')
     return `${year}-${month}-${day}`
   })
+  const [reportNo, setReportNo] = useState('')
   const [machine, setMachine] = useState('—')
   const [engineerName, setEngineerName] = useState('')
   const [dwgRefBy, setDwgRefBy] = useState('')
@@ -969,6 +970,7 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
                     try {
                       const visitPayload = {
                         siteId: match.id,
+                        visitCode: reportNo.trim() || undefined,
                         visitDate,
                         siteAddress: siteAddress.trim(),
                         sitePhone: sitePhone.trim(),
@@ -1138,6 +1140,16 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
                           className="h-11 w-full rounded-xl border border-neutral-200 bg-white px-3 pr-10 text-sm font-semibold text-neutral-900 outline-none transition focus:border-[#f39b03]/80 focus:ring-2 focus:ring-[#f39b03]/20"
                         />
                       </div>
+                    </label>
+
+                    <label className="grid gap-2">
+                      <span className="text-xs font-bold text-neutral-700">Report No.</span>
+                      <input
+                        value={reportNo}
+                        onChange={(e) => setReportNo(e.target.value)}
+                        placeholder="e.g. SV-4001 (auto if blank)"
+                        className="h-11 w-full rounded-xl border border-neutral-200 bg-white px-3 text-sm font-semibold text-neutral-900 outline-none transition focus:border-[#f39b03]/80 focus:ring-2 focus:ring-[#f39b03]/20"
+                      />
                     </label>
 
                     {showDrawingFields && (

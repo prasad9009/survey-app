@@ -42,6 +42,7 @@ function billingLinesToDraft(lines?: InvoicePdfBillingLine[]): BillingLineDraft[
 export type EditSiteVisitInitial = {
   visitMongoId: string
   visitId: string
+  visitCode?: string
   date: string
   engineerName?: string
   dwgRefBy?: string
@@ -84,12 +85,13 @@ const fieldClass =
 
 export function EditSiteVisitModal({ open, initial, onClose, onSaved }: EditSiteVisitModalProps) {
   const [visitDate, setVisitDate] = useState('')
+  const [reportNo, setReportNo] = useState('')
   const [engineerName, setEngineerName] = useState('')
   const [dwgRefBy, setDwgRefBy] = useState('')
   const [dwgNo, setDwgNo] = useState('')
   const [machine, setMachine] = useState('Total Station')
   const [notes, setNotes] = useState('')
-  const [paymentMode, setPaymentMode] = useState('�')
+  const [paymentMode, setPaymentMode] = useState('—')
   const [paymentStatus, setPaymentStatus] = useState('pending')
   const [billingLines, setBillingLines] = useState<BillingLineDraft[]>(() => billingLinesToDraft())
   const [billingOtherCharges, setBillingOtherCharges] = useState('0')
@@ -101,6 +103,7 @@ export function EditSiteVisitModal({ open, initial, onClose, onSaved }: EditSite
   useEffect(() => {
     if (!open || !initial) return
     setVisitDate(parseVisitDateForInput(initial.date))
+    setReportNo(initial.visitCode ?? initial.visitId ?? '')
     setEngineerName(initial.engineerName ?? '')
     setDwgRefBy(initial.dwgRefBy ?? '')
     setDwgNo(initial.dwgNo ?? '')
@@ -150,6 +153,7 @@ export function EditSiteVisitModal({ open, initial, onClose, onSaved }: EditSite
     try {
       const res = await http.put<{ ok: boolean; error?: string }>(`/api/site-visits/${initial.visitMongoId}`, {
         visitDate,
+        visitCode: reportNo.trim(),
         engineerName: showDrawingFields ? engineerName.trim() : '',
         dwgRefBy: showDrawingFields ? dwgRefBy.trim() : '',
         dwgNo: showDrawingFields ? dwgNo.trim() : '',
@@ -194,6 +198,7 @@ export function EditSiteVisitModal({ open, initial, onClose, onSaved }: EditSite
         <form onSubmit={handleSubmit} className="flex flex-1 flex-col overflow-hidden">
           <div className="flex-1 space-y-3 overflow-y-auto px-4 py-3">
             <label className="grid gap-1"><span className="text-xs font-bold text-neutral-700">Visit Date</span><input type="date" value={visitDate} onChange={(e) => setVisitDate(e.target.value)} className={fieldClass} /></label>
+            <label className="grid gap-1"><span className="text-xs font-bold text-neutral-700">Report No.</span><input value={reportNo} onChange={(e) => setReportNo(e.target.value)} placeholder="e.g. SV-4001" className={fieldClass} /></label>
 
             {/* Form Toggle Switch */}
             <div className="flex items-center justify-between gap-3 rounded-xl border border-neutral-200/80 bg-neutral-50/50 p-3 transition-all hover:bg-neutral-50">

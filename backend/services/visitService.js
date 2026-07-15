@@ -279,7 +279,9 @@ export async function createVisit(req, body, { preUploadedPhotos } = {}) {
     .lean()
   if (!clientRow) throw new ApiError(404, 'Client not found for this site')
 
-  const visitCode = await nextVisitCode(req.user.companyId)
+  const visitCode = (typeof body.visitCode === 'string' && body.visitCode.trim())
+    ? body.visitCode.trim()
+    : await nextVisitCode(req.user.companyId)
   const visitNo = await nextVisitNoForSite(site._id)
   const visitDate = body.visitDate ? new Date(body.visitDate) : new Date()
   const siteAddress =
@@ -412,6 +414,7 @@ export async function updateVisit(req, visitId, body) {
   if (typeof body.machineLabel === 'string') visit.machineLabel = body.machineLabel.trim()
   if (typeof body.includeDrawingDetails === 'boolean') visit.includeDrawingDetails = body.includeDrawingDetails
   if (typeof body.notes === 'string') visit.notes = body.notes.trim()
+  if (typeof body.visitCode === 'string') visit.visitCode = body.visitCode.trim()
   if (typeof body.paymentMode === 'string') visit.paymentMode = body.paymentMode.trim()
 
   if (body.paymentStatus != null) {
