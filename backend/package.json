@@ -3,6 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "build": "echo 'No build step required for backend'",
     "dev": "node --watch server.js",
     "start": "node --max-old-space-size=384 server.js",
     "seed": "node seed/seed.js",
