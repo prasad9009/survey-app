@@ -1,5 +1,16 @@
 import { ChevronDown, Search } from 'lucide-react'
-import { useCallback, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from 'react'
+import {
+  Children,
+  isValidElement,
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type ReactNode,
+} from 'react'
 
 export type AppSelectOption = {
   value: string
@@ -10,9 +21,11 @@ export type AppSelectOption = {
 type AppSelectProps = {
   value: string
   onChange: (value: string) => void
-  options: AppSelectOption[]
+  options?: AppSelectOption[]
+  children?: ReactNode
   placeholder?: string
   className?: string
+  selectClassName?: string
   /** Additional classes for the trigger button (e.g. tighter `pr-*` in narrow headers). */
   triggerButtonClassName?: string
   /** Tailwind horizontal offset for the chevron (default `right-3`, same as Visit Date icon). */
@@ -28,8 +41,10 @@ export function AppSelect({
   value,
   onChange,
   options,
+  children,
   placeholder = 'Select…',
   className = '',
+  selectClassName = '',
   triggerButtonClassName = '',
   chevronPositionClass = 'right-3',
   searchableThreshold = 8,
@@ -45,14 +60,33 @@ export function AppSelect({
   const rootRef = useRef<HTMLDivElement>(null)
   const searchRef = useRef<HTMLInputElement>(null)
 
-  const selected = options.find((o) => o.value === value)
-  const searchable = options.length >= searchableThreshold
+  // Parse options from array prop or JSX <option> children
+  const parsedOptions = useMemo(() => {
+    if (Array.isArray(options) && options.length > 0) return options
+    const list: AppSelectOption[] = []
+    Children.forEach(children, (child) => {
+      if (isValidElement(child)) {
+        const props = child.props as { value?: string; children?: ReactNode; disabled?: boolean }
+        const val = String(props.value ?? '')
+        const label =
+          typeof props.children === 'string' || typeof props.children === 'number'
+            ? String(props.children)
+            : val
+        list.push({ value: val, label, disabled: Boolean(props.disabled) })
+      }
+    })
+    return list
+  }, [options, children])
+
+  const safeOptions = parsedOptions ?? []
+  const selected = safeOptions.find((o) => o.value === value)
+  const searchable = safeOptions.length >= searchableThreshold
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
-    if (!q) return options
-    return options.filter((o) => o.label.toLowerCase().includes(q))
-  }, [options, query])
+    if (!q) return safeOptions
+    return safeOptions.filter((o) => o.label.toLowerCase().includes(q))
+  }, [safeOptions, query])
 
   const enabledIndices = useMemo(
     () => filtered.map((o, i) => (o.disabled ? -1 : i)).filter((i) => i >= 0),
@@ -135,8 +169,10 @@ export function AppSelect({
     }
   }
 
+  const combinedRootClass = className || selectClassName || ''
+
   return (
-    <SelectRoot ref={rootRef} className={className}>
+    <SelectRoot ref={rootRef} className={combinedRootClass}>
       <button
         type="button"
         id={triggerId}
@@ -150,7 +186,6 @@ export function AppSelect({
         }}
         onKeyDown={onKeyDown}
         className={[
-          // Text only; chevron is a sibling pinned to the root (same pattern as Visit Date + calendar icon).
           'relative z-10 flex h-full w-full min-w-0 appearance-none items-center rounded-[inherit] border-0 bg-transparent pr-10 text-left outline-none',
           triggerButtonClassName,
           disabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer',

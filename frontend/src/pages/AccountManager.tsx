@@ -1,4 +1,5 @@
 import {
+  Activity,
   BarChart3,
   Briefcase,
   Building2,
@@ -64,6 +65,7 @@ const navItems: NavItem[] = [
   { label: 'Account Manager', icon: <Briefcase size={16} /> },
   { label: 'Clients & Sites', icon: <UsersRound size={16} /> },
   { label: 'Site Visits', icon: <FileText size={16} /> },
+  { label: 'Transitions', icon: <Activity size={16} /> },
   // { label: 'Reports', icon: <FileBarChart size={16} /> },
   { label: 'Settings', icon: <Building2 size={16} /> },
   { label: 'Log Out', icon: <LogOut size={16} /> },
@@ -429,6 +431,7 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
       'Account Manager': '/account-manager',
       'Clients & Sites': '/clients-sites',
       'Site Visits': '/site-visits',
+      Transitions: '/activity-logs',
       Reports: '/reports',
       Settings: '/settings',
     }

@@ -26,6 +26,8 @@ const AddSiteVisit = lazy(() => import('./pages/AddSiteVisit'))
 const SiteDetails = lazy(() => import('./pages/SiteDetails').then((m) => ({ default: m.SiteDetails })))
 const Reports = lazy(() => import('./pages/Reports'))
 const Settings = lazy(() => import('./pages/Settings'))
+const ActivityLogs = lazy(() => import('./pages/ActivityLogs'))
+
 
 const PUBLIC_PATHS = new Set(['/login', '/forgot-password', '/verify-reset-otp', '/reset-password'])
 
@@ -110,6 +112,8 @@ function AppRoutes() {
           <Route path="/add-site-visit" element={<AddSiteVisit onNavigate={navigate} />} />
           <Route path="/site-details" element={<SiteDetails onNavigate={navigate} />} />
           <Route path="/reports" element={<Reports onNavigate={navigate} />} />
+          <Route path="/activity-logs" element={<ActivityLogs onNavigate={navigate} />} />
+          <Route path="/transitions" element={<ActivityLogs onNavigate={navigate} />} />
           <Route path="/settings" element={<Settings onNavigate={navigate} />} />
           <Route path="*" element={<CatchAllRedirect />} />
         </Route>

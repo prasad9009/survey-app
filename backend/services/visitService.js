@@ -13,6 +13,8 @@ import { owedAmount } from '../utils/visitPaymentMath.js'
 import { recomputeVisitCreditsForSite } from './visitCreditAllocation.js'
 import * as uploadService from './uploadService.js'
 import { parsePagination } from '../utils/pagination.js'
+import { logActivity, getActorInfo } from './activityLogService.js'
+
 
 async function nextVisitCode(companyId) {
   const key = `visit:${companyId.toString()}`
@@ -367,6 +369,16 @@ export async function createVisit(req, body, { preUploadedPhotos } = {}) {
   site.lastVisitAt = visitDate
   await site.save()
 
+  const actor = getActorInfo(req)
+  logActivity({
+    ...actor,
+    action: 'CREATE_VISIT',
+    entityType: 'site_visit',
+    entityId: visit._id,
+    summary: `${actor.userName} logged site visit '${visitCode}' for site '${site.name}'`,
+    details: { visitCode, siteName: site.name, clientName: clientRow.name, amount: amountSafe, paymentStatus },
+  })
+
   const populated = await SiteVisit.findById(visit._id)
     .populate('clientId', 'name')
     .populate('siteId', 'name')
@@ -439,6 +451,16 @@ export async function updateVisit(req, visitId, body) {
   }
 
   await visit.save()
+
+  const actor = getActorInfo(req)
+  logActivity({
+    ...actor,
+    action: 'UPDATE_VISIT',
+    entityType: 'site_visit',
+    entityId: visit._id,
+    summary: `${actor.userName} updated site visit '${visit.visitCode || visit._id.toString()}'`,
+    details: { visitCode: visit.visitCode, paymentStatus: visit.paymentStatus },
+  })
 
   const latest = await SiteVisit.findOne({ siteId: visit.siteId, companyId: req.user.companyId })
     .sort({ visitDate: -1 })
@@ -576,6 +598,16 @@ export async function deleteVisit(req, visitId) {
       siteId: visit.siteId,
     })
   }
+
+  const delActor = getActorInfo(req)
+  logActivity({
+    ...delActor,
+    action: 'DELETE_VISIT',
+    entityType: 'site_visit',
+    entityId: vid,
+    summary: `${delActor.userName} deleted site visit '${code || vid.toString()}'`,
+    details: { visitCode: code, siteName: site?.name },
+  })
 
   const latest = await SiteVisit.findOne({ siteId, companyId: req.user.companyId })
     .sort({ visitDate: -1 })

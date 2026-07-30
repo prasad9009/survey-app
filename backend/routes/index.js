@@ -19,6 +19,8 @@ import * as reportService from '../services/reportService.js'
 import * as calculatorService from '../services/calculatorService.js'
 import * as instrumentService from '../services/instrumentService.js'
 import * as uploadService from '../services/uploadService.js'
+import * as activityLogService from '../services/activityLogService.js'
+
 import { parseObjectId } from '../utils/instrumentAccess.js'
 import { ApiError } from '../utils/ApiError.js'
 import {
@@ -300,6 +302,12 @@ router.get('/reports/rows', validateQuery(reportQuerySchema), catchAsync(async (
   const data = await reportService.listReportRows(req, req.query)
   res.json({ ok: true, rows: data })
 }))
+
+router.get('/activity-logs', catchAsync(async (req, res) => {
+  const data = await activityLogService.listActivityLogs(req, req.query)
+  res.json({ ok: true, ...data })
+}))
+
 
 router.post('/calculator/quote', validateBody(calculatorSchema), catchAsync(async (req, res) => {
   const data = calculatorService.quote(req.body)

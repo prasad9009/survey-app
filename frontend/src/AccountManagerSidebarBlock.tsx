@@ -4,7 +4,7 @@ import { useInstrumentCoworkers } from './hooks/queries'
 import { useAuth } from './context/AuthContext'
 
 type AccountManagerSidebarBlockProps = {
-  pathname: string
+  pathname?: string
   onNavigate: (path: string) => void
   onAfterNavigate?: () => void
 }
@@ -16,6 +16,8 @@ export function AccountManagerSidebarBlock({
 }: AccountManagerSidebarBlockProps) {
   const { managers, isLoading: authLoading } = useAuth()
   const { coworkers, isLoading: coworkersLoading, isFetched: coworkersFetched } = useInstrumentCoworkers()
+
+  const safePathname = pathname || (typeof window !== 'undefined' ? window.location.pathname : '')
 
   const sidebarManagers = useMemo(() => {
     const fromInstrument = coworkers
@@ -35,7 +37,7 @@ export function AccountManagerSidebarBlock({
 
   const listReady = !authLoading && (!coworkersLoading || coworkersFetched)
 
-  const isUnderAccount = pathname.startsWith('/account-manager')
+  const isUnderAccount = safePathname.startsWith('/account-manager')
   const [open, setOpen] = useState(false)
   const submenuId = useId()
 
@@ -132,7 +134,7 @@ export function AccountManagerSidebarBlock({
                 <ul className="flex flex-col gap-0.5" role="list">
                   {sidebarManagers.map((m) => {
                     const path = `/account-manager/${m.id}`
-                    const subActive = pathname === path
+                    const subActive = safePathname === path
                     return (
                       <li key={m.id}>
                         <button
@@ -154,7 +156,7 @@ export function AccountManagerSidebarBlock({
                             ].join(' ')}
                             aria-hidden
                           >
-                            {m.shortName
+                            {(m.shortName || m.name || '')
                               .split(/\s+/)
                               .map((w) => w[0])
                               .join('')

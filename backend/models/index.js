@@ -12,3 +12,5 @@ export { default as Invoice } from './Invoice.js'
 export { default as Counter } from './Counter.js'
 export { default as Subscription } from './Subscription.js'
 export { default as AmcRecord } from './AmcRecord.js'
+export { default as ActivityLog } from './ActivityLog.js'
+

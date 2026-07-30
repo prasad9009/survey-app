@@ -34,6 +34,7 @@ async function run() {
   await Transaction.deleteMany({})
   await Subscription.deleteMany({})
 
+  // 1. Company (1 Record)
   const company = await Company.create({
     name: 'Samarth Land Surveyors',
     ownerName: 'Er. Shubham Bhoi',
@@ -50,6 +51,7 @@ async function run() {
     currentPeriodEnd: new Date(Date.now() + 365 * 864e5),
   })
 
+  // 2. Users (1 Super Admin & 2 Admins)
   const passwordHash = await bcrypt.hash(pwd, 12)
   const superUser = await User.create({
     companyId: company._id,
@@ -59,14 +61,23 @@ async function run() {
     profile: { fullName: 'Super Admin', phone: '+91 9990000001' },
   })
 
-  const adminUser = await User.create({
+  const adminUser1 = await User.create({
     companyId: company._id,
-    email: 'surveyor@samarth.local',
+    email: 'shubham@samarth.local',
     passwordHash,
     role: 'admin',
     profile: { fullName: 'Er. Shubham Bhoi', phone: '+91 8643001010' },
   })
 
+  const adminUser2 = await User.create({
+    companyId: company._id,
+    email: 'sanket@samarth.local',
+    passwordHash,
+    role: 'admin',
+    profile: { fullName: 'Er. Sanket Katakar', phone: '+91 7026016077' },
+  })
+
+  // 3. Instrument (1 Record)
   const inst1 = await Instrument.create({
     companyId: company._id,
     name: 'Total Station TS-01',
@@ -74,48 +85,58 @@ async function run() {
     serialNumber: 'TS-2024-001',
     status: 'operational',
   })
-  const inst2 = await Instrument.create({
-    companyId: company._id,
-    name: 'DGPS Rover R1',
-    category: 'DGPS',
-    serialNumber: 'DGPS-2024-002',
-    status: 'operational',
-  })
 
+  // 4. Instrument Assignments (Assigned to both Admin Users)
   await InstrumentAssignment.insertMany([
-    { companyId: company._id, adminId: adminUser._id, instrumentId: inst1._id, assignedByUserId: superUser._id, isActive: true },
-    { companyId: company._id, adminId: adminUser._id, instrumentId: inst2._id, assignedByUserId: superUser._id, isActive: true },
+    {
+      companyId: company._id,
+      adminId: adminUser1._id,
+      instrumentId: inst1._id,
+      assignedByUserId: superUser._id,
+      isActive: true,
+    },
+    {
+      companyId: company._id,
+      adminId: adminUser2._id,
+      instrumentId: inst1._id,
+      assignedByUserId: superUser._id,
+      isActive: true,
+    },
   ])
 
+  // 5. Account Managers (2 Records for the 2 Admin Users)
   const am1 = await AccountManager.create({
     companyId: company._id,
-    adminId: adminUser._id,
+    adminId: adminUser1._id,
+    instrumentId: inst1._id,
+    slug: 'shubham-bhoi',
+    fullName: 'Er. Shubham Bhoi',
+    shortName: 'Shubham Bhoi',
+    phone: '+91 8643001010',
+  })
+
+  const am2 = await AccountManager.create({
+    companyId: company._id,
+    adminId: adminUser2._id,
     instrumentId: inst1._id,
     slug: 'sanket-katkar',
     fullName: 'Er. Sanket Katakar',
     shortName: 'Sanket Katakar',
     phone: '+91 7026016077',
   })
-  const am2 = await AccountManager.create({
-    companyId: company._id,
-    adminId: adminUser._id,
-    instrumentId: inst1._id,
-    slug: 'shubham-sodage',
-    fullName: 'Er. Shubham Sodage',
-    shortName: 'Shubham Sodage',
-    phone: '+91 9595975566',
-  })
 
+  // 6. Operational Data (Client, Site, Visit, Transactions)
   const client1 = await Client.create({
     companyId: company._id,
-    adminId: adminUser._id,
+    adminId: adminUser1._id,
     instrumentId: inst1._id,
     name: 'Amit Developers',
     phone: '9876543210',
   })
+
   const site1 = await Site.create({
     companyId: company._id,
-    adminId: adminUser._id,
+    adminId: adminUser1._id,
     instrumentId: inst1._id,
     clientId: client1._id,
     name: 'Sai Residency',
@@ -126,7 +147,7 @@ async function run() {
 
   await SiteVisit.create({
     companyId: company._id,
-    adminId: adminUser._id,
+    adminId: adminUser1._id,
     instrumentId: inst1._id,
     clientId: client1._id,
     siteId: site1._id,
@@ -144,23 +165,25 @@ async function run() {
   await Transaction.insertMany([
     {
       companyId: company._id,
-      adminId: adminUser._id,
+      adminId: adminUser1._id,
       accountManagerId: am1._id,
+      instrumentId: inst1._id,
+      type: 'credit',
+      amount: mongoose.Types.Decimal128.fromString('15000.00'),
+      occurredOn: new Date(),
+      reason: 'Client payment for survey',
+      clientId: client1._id,
+      siteId: site1._id,
+    },
+    {
+      companyId: company._id,
+      adminId: adminUser2._id,
+      accountManagerId: am2._id,
       instrumentId: inst1._id,
       type: 'debit',
       amount: mongoose.Types.Decimal128.fromString('1500.00'),
       occurredOn: new Date(),
-      reason: 'Petrol',
-    },
-    {
-      companyId: company._id,
-      adminId: adminUser._id,
-      accountManagerId: am1._id,
-      instrumentId: inst1._id,
-      type: 'credit',
-      amount: mongoose.Types.Decimal128.fromString('12000.00'),
-      occurredOn: new Date(),
-      reason: 'Client payment',
+      reason: 'Site travel & fuel expense',
       clientId: client1._id,
       siteId: site1._id,
     },
@@ -168,7 +191,8 @@ async function run() {
 
   console.info('Seed complete.')
   console.info('Super Admin: admin@samarth.local /', pwd)
-  console.info('Admin:       surveyor@samarth.local /', pwd)
+  console.info('Admin 1:     shubham@samarth.local /', pwd)
+  console.info('Admin 2:     sanket@samarth.local /', pwd)
   await mongoose.connection.close()
   process.exit(0)
 }

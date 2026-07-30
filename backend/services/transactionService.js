@@ -14,6 +14,8 @@ import {
 import { visitDateRangeForYear } from '../utils/yearQuery.js'
 import * as accountManagerService from './accountManagerService.js'
 import { recomputeVisitCreditsForSite } from './visitCreditAllocation.js'
+import { logActivity, getActorInfo } from './activityLogService.js'
+
 
 function decNum(v) {
   return parseFloat((v ?? 0).toString()) || 0
@@ -157,12 +159,23 @@ export async function createTransaction(req, accountManagerId, body) {
     await session.endSession()
   }
 
+  const actor = getActorInfo(req)
+  const txId = (created?._id || txPayload._id)?.toString?.() || ''
+  logActivity({
+    ...actor,
+    action: 'CREATE_TRANSACTION',
+    entityType: 'transaction',
+    entityId: txId || null,
+    summary: `${actor.userName} recorded ${body.type.toUpperCase()} transaction of ₹${body.amount} for ${am.shortName || am.fullName}`,
+    details: { type: body.type, amount: body.amount, reason: body.reason, accountManager: am.fullName },
+  })
+
   return {
-    id: created._id.toString(),
-    type: created.type,
+    id: created ? created._id.toString() : '',
+    type: body.type,
     amount: Number(body.amount) || 0,
-    date: created.occurredOn.toISOString().slice(0, 10),
-    reason: created.reason,
+    date: created ? created.occurredOn.toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10),
+    reason: body.reason,
     client: body.clientName,
     site: body.siteName,
   }
@@ -189,6 +202,16 @@ export async function deleteTransaction(req, txId) {
       siteId: t.siteId,
     })
   }
+
+  const delActor = getActorInfo(req)
+  logActivity({
+    ...delActor,
+    action: 'DELETE_TRANSACTION',
+    entityType: 'transaction',
+    entityId: t._id,
+    summary: `${delActor.userName} deleted ${t.type.toUpperCase()} transaction of ₹${decNum(t.amount)}`,
+    details: { type: t.type, amount: decNum(t.amount), reason: t.reason },
+  })
 
   return { ok: true }
 }

@@ -14,6 +14,8 @@ import { reconcileSiteCreditsForInstrument } from './visitCreditAllocation.js'
 import { decAmount, effectivePaidAmount } from '../utils/visitPaymentMath.js'
 import { visitDateRangeForYear } from '../utils/yearQuery.js'
 import { parsePagination } from '../utils/pagination.js'
+import { logActivity, getActorInfo } from './activityLogService.js'
+
 
 function formatInr(n) {
   return `₹${Math.round(n).toLocaleString('en-IN')}`
@@ -187,6 +189,16 @@ export async function createClient(req, body) {
     }
     throw e
   }
+
+  const actor = getActorInfo(req)
+  logActivity({
+    ...actor,
+    action: 'CREATE_CLIENT',
+    entityType: 'client',
+    entityId: client._id,
+    summary: `${actor.userName} added client '${client.name}'`,
+    details: { name: client.name, phone: client.phone },
+  })
 
   return {
     id: client._id.toString(),
@@ -402,6 +414,16 @@ export async function updateClient(req, clientId, body) {
     visitYearRange,
     effectiveInstrumentId,
   )
+  const actor = getActorInfo(req)
+  logActivity({
+    ...actor,
+    action: 'UPDATE_CLIENT',
+    entityType: 'client',
+    entityId: updated._id,
+    summary: `${actor.userName} updated client '${updated.name}'`,
+    details: { name: updated.name, phone: updated.phone },
+  })
+
   return {
     id: updated._id.toString(),
     name: updated.name,
@@ -472,6 +494,16 @@ export async function deleteClientWithSites(req, clientId) {
   }
   const deletedSites = await Site.deleteMany({ clientId: client._id, companyId: req.user.companyId })
   await Client.deleteOne({ _id: client._id, companyId: req.user.companyId })
+
+  const delActor = getActorInfo(req)
+  logActivity({
+    ...delActor,
+    action: 'DELETE_CLIENT',
+    entityType: 'client',
+    entityId: client._id,
+    summary: `${delActor.userName} deleted client '${client.name}' and related sites`,
+    details: { clientName: client.name, sitesDeleted: deletedSites.deletedCount },
+  })
 
   return { sitesDeleted: deletedSites.deletedCount }
 }

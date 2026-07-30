@@ -12,6 +12,8 @@ import { visitDateRangeForYear } from '../utils/yearQuery.js'
 import { decAmount, effectivePaidAmount } from '../utils/visitPaymentMath.js'
 import * as uploadService from './uploadService.js'
 import { parsePagination } from '../utils/pagination.js'
+import { logActivity, getActorInfo } from './activityLogService.js'
+
 
 function formatInr(n) {
   return `₹${Math.round(n).toLocaleString('en-IN')}`
@@ -129,6 +131,16 @@ export async function updateSite(req, siteId, body) {
   Object.assign(site, patch)
   await site.save()
 
+  const actor = getActorInfo(req)
+  logActivity({
+    ...actor,
+    action: 'UPDATE_SITE',
+    entityType: 'site',
+    entityId: site._id,
+    summary: `${actor.userName} updated site '${site.name}'`,
+    details: { name: site.name, status: site.status, locationLabel: site.locationLabel },
+  })
+
   const visitYearRange = visitDateRangeForYear(req.query?.year)
   const { received, pending } = await siteFinancials(site._id, visitYearRange, effectiveInstrumentId)
   const lastVisit = await lastVisitLabelForSite(site._id, visitYearRange, site.lastVisitAt)
@@ -160,6 +172,17 @@ export async function createSite(req, { clientId, name, locationLabel }) {
     locationLabel: locationLabel?.trim(),
     status: 'active',
   })
+
+  const actor = getActorInfo(req)
+  logActivity({
+    ...actor,
+    action: 'CREATE_SITE',
+    entityType: 'site',
+    entityId: site._id,
+    summary: `${actor.userName} added new site '${site.name}' for client '${client.name}'`,
+    details: { siteName: site.name, clientName: client.name, locationLabel: site.locationLabel },
+  })
+
   return {
     id: site._id.toString(),
     name: site.name,
@@ -281,4 +304,14 @@ export async function deleteSiteWithRelated(req, siteId) {
     await SurveyFile.deleteMany({ companyId: req.user.companyId, _id: { $in: fileObjectIds } })
   }
   await Site.deleteOne({ _id: site._id, companyId: req.user.companyId })
+
+  const delActor = getActorInfo(req)
+  logActivity({
+    ...delActor,
+    action: 'DELETE_SITE',
+    entityType: 'site',
+    entityId: site._id,
+    summary: `${delActor.userName} deleted site '${site.name}'`,
+    details: { siteName: site.name },
+  })
 }

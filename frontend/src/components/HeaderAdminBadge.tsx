@@ -1,15 +1,17 @@
 import { CircleUserRound } from 'lucide-react'
+import { useAuth } from '../context/AuthContext'
 
 type HeaderAdminBadgeProps = {
-  name: string
+  name?: string
   roleLabel?: string
   /** Prefix "Er." when the name is present (Account Manager pages). */
   withErPrefix?: boolean
   variant?: 'desktop' | 'mobile'
 }
 
-function formatDisplayName(name: string, withErPrefix: boolean) {
-  const trimmed = name.trim().replace(/^Er\.\s*/i, '').trim()
+function formatDisplayName(name: string | undefined, withErPrefix: boolean) {
+  const raw = typeof name === 'string' ? name : ''
+  const trimmed = raw.trim().replace(/^Er\.\s*/i, '').trim()
   if (!trimmed) return '—'
   if (withErPrefix) return `Er. ${trimmed}`
   return trimmed
@@ -17,11 +19,14 @@ function formatDisplayName(name: string, withErPrefix: boolean) {
 
 export function HeaderAdminBadge({
   name,
-  roleLabel = 'Admin',
+  roleLabel,
   withErPrefix = false,
   variant = 'desktop',
 }: HeaderAdminBadgeProps) {
-  const displayName = formatDisplayName(name, withErPrefix)
+  const { user } = useAuth()
+  const resolvedName = name ?? user?.fullName ?? user?.email ?? ''
+  const resolvedRole = roleLabel ?? (user?.role === 'super_admin' ? 'Super Admin' : 'Admin')
+  const displayName = formatDisplayName(resolvedName, withErPrefix)
 
   if (variant === 'mobile') {
     return (
@@ -33,8 +38,8 @@ export function HeaderAdminBadge({
         <span className="min-w-0 truncate text-[11px] font-extrabold leading-tight text-white/90">
           {displayName}
         </span>
-        {roleLabel ? (
-          <span className="shrink-0 text-[10px] font-semibold text-white/55">· {roleLabel}</span>
+        {resolvedRole ? (
+          <span className="shrink-0 text-[10px] font-semibold text-white/55">· {resolvedRole}</span>
         ) : null}
       </div>
     )
@@ -50,7 +55,7 @@ export function HeaderAdminBadge({
       </div>
       <div className="min-w-0 text-left">
         <div className="truncate text-xs font-extrabold text-neutral-900 sm:text-sm">{displayName}</div>
-        <div className="truncate text-[11px] font-semibold text-neutral-600">{roleLabel}</div>
+        <div className="truncate text-[11px] font-semibold text-neutral-600">{resolvedRole}</div>
       </div>
     </div>
   )
