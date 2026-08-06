@@ -1,5 +1,6 @@
 import ActivityLog from '../models/ActivityLog.js'
 import { parseObjectId } from '../utils/instrumentAccess.js'
+import { visitDateRangeForYear } from '../utils/yearQuery.js'
 
 /**
  * Record a mutating transition (create, update, delete) asynchronously.
@@ -53,7 +54,7 @@ export function getActorInfo(req) {
  */
 export async function listActivityLogs(req, query = {}) {
   const companyId = req.user.companyId
-  const { search, userId, entityType, action, startDate, endDate, page = 1, limit = 20 } = query
+  const { search, userId, entityType, action, startDate, endDate, year, page = 1, limit = 20 } = query
 
   const filter = { companyId }
 
@@ -68,7 +69,10 @@ export async function listActivityLogs(req, query = {}) {
   if (entityType && entityType !== 'all') filter.entityType = entityType
   if (action && action !== 'all') filter.action = action
 
-  if (startDate || endDate) {
+  const yearRange = visitDateRangeForYear(year)
+  if (yearRange) {
+    filter.createdAt = yearRange
+  } else if (startDate || endDate) {
     filter.createdAt = {}
     if (startDate) filter.createdAt.$gte = new Date(startDate)
     if (endDate) filter.createdAt.$lte = new Date(new Date(endDate).setHours(23, 59, 59, 999))

@@ -16,8 +16,10 @@ import {
   Info,
   LayoutGrid,
   LogOut,
+  Mail,
   MapPin,
   Menu,
+  Phone,
   Plus,
   RefreshCw,
   Search,
@@ -39,8 +41,10 @@ import { HeaderYearSelect } from '../components/HeaderYearSelect'
 import { BackgroundRefreshIndicator } from '../components/BackgroundRefreshIndicator'
 import { PageRefreshButton } from '../components/PageRefreshButton'
 import { useAuth } from '../context/AuthContext'
+import { useSelectedYear } from '../context/SelectedYearContext'
 import { signOut } from '../signOut'
 import http from '../services/http'
+import { CardShell, StatCard } from '../dashboardCards'
 
 type ActivityLogsProps = {
   onNavigate: (path: string) => void
@@ -77,7 +81,7 @@ const navItems: NavItem[] = [
   { label: 'Account Manager', icon: <Briefcase size={16} /> },
   { label: 'Clients & Sites', icon: <UsersRound size={16} /> },
   { label: 'Site Visits', icon: <ClipboardList size={16} /> },
-  { label: 'Transitions', icon: <Activity size={16} /> },
+  { label: 'History', icon: <Activity size={16} /> },
   { label: 'Settings', icon: <Building2 size={16} /> },
   { label: 'Log Out', icon: <LogOut size={16} /> },
 ]
@@ -268,6 +272,7 @@ function FriendlyDetailsViewer({ details }: { details: Record<string, unknown> }
 
 export default function ActivityLogs({ onNavigate }: ActivityLogsProps) {
   const { user, companyAdmins } = useAuth()
+  const { selectedYear } = useSelectedYear()
   const location = useLocation()
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const [logs, setLogs] = useState<LogItem[]>([])
@@ -286,6 +291,7 @@ export default function ActivityLogs({ onNavigate }: ActivityLogsProps) {
     setLoading(true)
     try {
       const params = new URLSearchParams()
+      if (selectedYear) params.set('year', selectedYear)
       if (selectedAdminId !== 'all') params.set('userId', selectedAdminId)
       if (selectedEntityType !== 'all') params.set('entityType', selectedEntityType)
       if (searchQuery.trim()) params.set('search', searchQuery.trim())
@@ -318,7 +324,7 @@ export default function ActivityLogs({ onNavigate }: ActivityLogsProps) {
 
   useEffect(() => {
     fetchLogs()
-  }, [selectedAdminId, selectedActionCategory, selectedEntityType, page])
+  }, [selectedYear, selectedAdminId, selectedActionCategory, selectedEntityType, page])
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -338,7 +344,7 @@ export default function ActivityLogs({ onNavigate }: ActivityLogsProps) {
       'Account Manager': '/account-manager',
       'Clients & Sites': '/clients-sites',
       'Site Visits': '/site-visits',
-      Transitions: '/activity-logs',
+      History: '/activity-logs',
       Reports: '/reports',
       Settings: '/settings',
     }
@@ -346,6 +352,15 @@ export default function ActivityLogs({ onNavigate }: ActivityLogsProps) {
     if (nextPath) onNavigate(nextPath)
     setIsSidebarOpen(false)
   }
+
+  const mobileBottomNav = [
+    { label: 'Dashboard', path: '/dashboard', icon: LayoutGrid },
+    { label: 'Accounts', path: '/account-manager', icon: Briefcase },
+    { label: 'Clients', path: '/clients-sites', icon: UsersRound },
+    { label: 'Visits', path: '/site-visits', icon: MapPin },
+    { label: 'History', path: '/activity-logs', icon: Activity },
+    { label: 'Settings', path: '/settings', icon: Building2 },
+  ] as const
 
   // Calculate summary counts for top cards
   const statsSummary = useMemo(() => {
@@ -389,7 +404,7 @@ export default function ActivityLogs({ onNavigate }: ActivityLogsProps) {
                     />
                   )
                 }
-                const active = item.label === 'Transitions'
+                const active = item.label === 'History'
                 const isLogout = item.label === 'Log Out'
                 return (
                   <button
@@ -401,8 +416,8 @@ export default function ActivityLogs({ onNavigate }: ActivityLogsProps) {
                       isLogout
                         ? 'bg-red-500/15 text-red-300 ring-1 ring-red-400/35 hover:bg-red-500/20 hover:text-red-200'
                         : active
-                        ? 'bg-[#f39b03]/18 text-[#f39b03] ring-1 ring-[#f39b03]/30'
-                        : 'text-white/85 hover:bg-white/5 hover:text-white',
+                          ? 'bg-[#f39b03]/18 text-[#f39b03] ring-1 ring-[#f39b03]/30'
+                          : 'text-white/85 hover:bg-white/5 hover:text-white',
                     ].join(' ')}
                   >
                     <span
@@ -419,6 +434,115 @@ export default function ActivityLogs({ onNavigate }: ActivityLogsProps) {
               })}
             </div>
           </nav>
+        </aside>
+
+        {isSidebarOpen ? (
+          <button
+            type="button"
+            className="fixed inset-0 z-40 bg-black/40 lg:hidden"
+            aria-label="Close sidebar overlay"
+            onClick={() => setIsSidebarOpen(false)}
+          />
+        ) : null}
+
+        <aside
+          className={[
+            'fixed inset-y-0 left-0 z-50 flex w-[280px] flex-col overflow-y-auto bg-gradient-to-b from-[#050505] via-[#0b0b0b] to-[#040404] pb-20 text-white transition-transform duration-300 lg:hidden',
+            isSidebarOpen ? 'translate-x-0' : '-translate-x-full',
+          ].join(' ')}
+          aria-label="Profile"
+        >
+          <div className="flex items-center justify-between px-5 pt-6">
+            <span className="text-sm font-extrabold tracking-tight text-white">Profile</span>
+            <button
+              type="button"
+              className="grid h-9 w-9 place-items-center rounded-xl bg-white/10 hover:bg-white/20"
+              aria-label="Close profile"
+              onClick={() => setIsSidebarOpen(false)}
+            >
+              <X size={18} />
+            </button>
+          </div>
+
+          <div className="mt-6 px-5">
+            <div className="rounded-2xl bg-white/5 p-4 ring-1 ring-white/10">
+              <div className="flex flex-col items-center text-center">
+                <div className="grid h-16 w-16 place-items-center rounded-2xl bg-white/10 text-white ring-1 ring-white/15">
+                  <CircleUserRound size={32} strokeWidth={1.75} />
+                </div>
+                <div className="mt-3 text-base font-extrabold text-white">Er. {user?.fullName || 'User'}</div>
+                <div className="mt-1 text-xs font-semibold text-white/65">{user?.role === 'super_admin' ? 'Super Admin' : 'Admin'}</div>
+              </div>
+              <div className="mt-4 space-y-2 border-t border-white/10 pt-4">
+                <a
+                  href="mailto:samarthlandsurveyors@gmail.com"
+                  className="flex items-center gap-2 rounded-xl px-2 py-2 text-left text-xs font-semibold text-white/90 hover:bg-white/5"
+                >
+                  <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-white/10 text-[#f39b03]">
+                    <Mail size={15} />
+                  </span>
+                  <span className="min-w-0 truncate">samarthlandsurveyors@gmail.com</span>
+                </a>
+                <a
+                  href="tel:+918643001010"
+                  className="flex items-center gap-2 rounded-xl px-2 py-2 text-left text-xs font-semibold text-white/90 hover:bg-white/5"
+                >
+                  <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-white/10 text-[#f39b03]">
+                    <Phone size={15} />
+                  </span>
+                  <span>+91 86430 01010</span>
+                </a>
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-5 px-5">
+            <div className="text-[11px] font-extrabold uppercase tracking-wide text-white/45">Quick navigation</div>
+            <div className="mt-2 space-y-2">
+              <AccountManagerSidebarBlock
+                pathname={location.pathname}
+                onNavigate={onNavigate}
+                onAfterNavigate={() => setIsSidebarOpen(false)}
+              />
+            </div>
+            <div className="mt-2 grid grid-cols-2 gap-2">
+              {[
+                { label: 'Dashboard', path: '/dashboard', icon: LayoutGrid },
+                { label: 'Clients', path: '/clients-sites', icon: UsersRound },
+                { label: 'Visits', path: '/site-visits', icon: MapPin },
+                { label: 'History', path: '/activity-logs', icon: Activity },
+              ].map(({ label, path, icon: Icon }) => (
+                <button
+                  type="button"
+                  key={path}
+                  onClick={() => {
+                    onNavigate(path)
+                    setIsSidebarOpen(false)
+                  }}
+                  className={[
+                    'flex flex-col items-center gap-1.5 rounded-xl px-2 py-3 text-[11px] font-bold ring-1 transition',
+                    path === '/activity-logs'
+                      ? 'bg-white/10 text-[#f39b03] ring-[#f39b03]/35'
+                      : 'bg-white/5 text-white/85 ring-white/10 hover:bg-white/10',
+                  ].join(' ')}
+                >
+                  <Icon size={18} />
+                  <span className="truncate">{label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="mt-6 flex-1 px-5">
+            <button
+              type="button"
+              onClick={() => handleNavClick('Log Out')}
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-red-500/15 py-3 text-sm font-bold text-red-200 ring-1 ring-red-400/35 hover:bg-red-500/25"
+            >
+              <LogOut size={18} />
+              Log Out
+            </button>
+          </div>
         </aside>
 
         {/* Main Content Area */}
@@ -443,7 +567,7 @@ export default function ActivityLogs({ onNavigate }: ActivityLogsProps) {
               <div className="flex items-center justify-between gap-3 border-t border-white/10 px-4 py-3">
                 <h1 className="min-w-0 truncate text-left text-base font-extrabold leading-tight tracking-tight text-white flex items-center gap-2">
                   <Activity size={18} className="text-[#f39b03]" />
-                  Transitions History
+                  History
                 </h1>
                 <div className="flex shrink-0 items-center gap-2">
                   <BackgroundRefreshIndicator isFetching={loading} />
@@ -454,10 +578,18 @@ export default function ActivityLogs({ onNavigate }: ActivityLogsProps) {
 
             <div className="relative hidden w-full items-center justify-between gap-4 border-b border-neutral-200 bg-white px-4 py-2.5 shadow-[0_6px_20px_rgba(16,24,40,0.05)] sm:px-6 md:flex md:px-6 md:py-4 lg:px-8">
               <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
+                <button
+                  type="button"
+                  className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-white shadow-sm ring-1 ring-black/5 hover:bg-neutral-50 md:h-10 md:w-10 md:shadow-[0_10px_30px_rgba(16,24,40,0.06)] lg:hidden"
+                  aria-label="Open menu"
+                  onClick={() => setIsSidebarOpen(true)}
+                >
+                  <Menu size={18} className="text-neutral-900" />
+                </button>
                 <div>
                   <h1 className="text-xl font-extrabold text-neutral-900 sm:text-2xl flex items-center gap-2.5">
                     <Activity className="h-6 w-6 text-[#f39b03]" />
-                    Transitions & Activity History
+                    Activity & Modification History
                   </h1>
                   <p className="text-xs font-semibold text-neutral-500">
                     Real-time transparent history of modifications performed by admins
@@ -482,52 +614,53 @@ export default function ActivityLogs({ onNavigate }: ActivityLogsProps) {
           </header>
 
           {/* Body Section */}
-          <div className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 space-y-6">
+          <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-white p-3.5 pb-[calc(3.65rem+max(12px,env(safe-area-inset-bottom,0px)))] sm:p-6 sm:pb-[calc(3.65rem+max(12px,env(safe-area-inset-bottom,0px)))] md:p-6 md:pb-24 lg:p-8 lg:pb-28 space-y-4 sm:space-y-6">
             {/* Quick Metrics Bar */}
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              <div className="rounded-2xl border border-neutral-200/80 bg-white p-4 shadow-2xs">
-                <div className="flex items-center justify-between text-neutral-500">
-                  <span className="text-xs font-bold uppercase tracking-wider">Total History</span>
-                  <History size={18} className="text-[#f39b03]" />
-                </div>
-                <div className="mt-2 text-2xl font-black text-neutral-900">{meta.total}</div>
-                <p className="mt-1 text-[11px] font-semibold text-neutral-500">Logged admin actions</p>
-              </div>
-
-              <div className="rounded-2xl border border-emerald-100 bg-emerald-50/40 p-4 shadow-2xs">
-                <div className="flex items-center justify-between text-emerald-700">
-                  <span className="text-xs font-bold uppercase tracking-wider">Added</span>
-                  <Plus size={18} className="text-emerald-600" />
-                </div>
-                <div className="mt-2 text-2xl font-black text-emerald-900">{statsSummary.creates}</div>
-                <p className="mt-1 text-[11px] font-semibold text-emerald-700">New records created</p>
-              </div>
-
-              <div className="rounded-2xl border border-amber-100 bg-amber-50/40 p-4 shadow-2xs">
-                <div className="flex items-center justify-between text-amber-700">
-                  <span className="text-xs font-bold uppercase tracking-wider">Modified</span>
-                  <FileText size={18} className="text-amber-600" />
-                </div>
-                <div className="mt-2 text-2xl font-black text-amber-900">{statsSummary.updates}</div>
-                <p className="mt-1 text-[11px] font-semibold text-amber-700">Records updated</p>
-              </div>
-
-              <div className="rounded-2xl border border-rose-100 bg-rose-50/40 p-4 shadow-2xs">
-                <div className="flex items-center justify-between text-rose-700">
-                  <span className="text-xs font-bold uppercase tracking-wider">Deleted</span>
-                  <Trash2 size={18} className="text-rose-600" />
-                </div>
-                <div className="mt-2 text-2xl font-black text-rose-900">{statsSummary.deletes}</div>
-                <p className="mt-1 text-[11px] font-semibold text-rose-700">Records removed</p>
-              </div>
-            </div>
+            <section className="grid grid-cols-2 gap-1.5 md:gap-4 xl:grid-cols-4">
+              <StatCard
+                title="Total History"
+                value={String(meta.total)}
+                subtitle="Logged admin actions"
+                icon={<History size={20} className="text-neutral-700 md:text-[#f39b03]" />}
+                toneClass="bg-neutral-200 md:bg-[#f39b03]/12"
+                mobileCardTint="bg-neutral-900/[0.07]"
+                loading={loading}
+              />
+              <StatCard
+                title="Added"
+                value={String(statsSummary.creates)}
+                subtitle="New records created"
+                icon={<Plus size={20} className="text-emerald-600" />}
+                toneClass="bg-emerald-100"
+                mobileCardTint="bg-emerald-50/90"
+                loading={loading}
+              />
+              <StatCard
+                title="Modified"
+                value={String(statsSummary.updates)}
+                subtitle="Records updated"
+                icon={<FileText size={20} className="text-amber-600" />}
+                toneClass="bg-amber-100"
+                mobileCardTint="bg-amber-50/90"
+                loading={loading}
+              />
+              <StatCard
+                title="Deleted"
+                value={String(statsSummary.deletes)}
+                subtitle="Records removed"
+                icon={<Trash2 size={20} className="text-rose-600" />}
+                toneClass="bg-rose-100"
+                mobileCardTint="bg-rose-50/90"
+                loading={loading}
+              />
+            </section>
 
             {/* User Friendly Filters Bar */}
-            <div className="rounded-2xl border border-neutral-200/80 bg-white p-4 shadow-2xs sm:p-5">
-              <div className="mb-3 flex items-center gap-2 text-xs font-extrabold uppercase tracking-wide text-neutral-400">
-                <Filter size={14} className="text-[#f39b03]" />
-                Filter Activity Logs
-              </div>
+            <CardShell
+              title="Filter Activity Logs"
+              leadingIcon={<Filter size={18} />}
+              bodyClassName="p-3.5 sm:p-5 md:p-6"
+            >
               <form onSubmit={handleSearchSubmit} className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 lg:grid-cols-4">
                 {/* Admin Select */}
                 <div>
@@ -603,10 +736,19 @@ export default function ActivityLogs({ onNavigate }: ActivityLogsProps) {
                   </div>
                 </div>
               </form>
-            </div>
+            </CardShell>
 
             {/* Visual Activity Timeline Feed */}
-            <div className="overflow-hidden rounded-2xl border border-neutral-200/80 bg-white shadow-2xs">
+            <CardShell
+              title="Activity & Modification History"
+              leadingIcon={<Activity size={18} />}
+              headerEnd={
+                <span className="text-xs font-semibold text-neutral-500">
+                  {meta.total} total records
+                </span>
+              }
+              bodyClassName="p-0 overflow-hidden"
+            >
               {loading ? (
                 <div className="flex h-64 flex-col items-center justify-center gap-2 text-sm font-bold text-neutral-500">
                   <RefreshCw className="h-6 w-6 animate-spin text-[#f39b03]" />
@@ -715,9 +857,9 @@ export default function ActivityLogs({ onNavigate }: ActivityLogsProps) {
 
               {/* Pagination */}
               {meta.pages > 1 && (
-                <div className="flex items-center justify-between border-t border-neutral-200/80 bg-neutral-50/60 px-4 py-3 sm:px-6">
+                <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between border-t border-neutral-200/80 bg-neutral-50/60 px-4 py-3 text-center sm:text-left sm:px-6">
                   <div className="text-xs font-bold text-neutral-600">
-                    Showing Page {meta.page} of {meta.pages} ({meta.total} total recorded transitions)
+                    Showing Page {meta.page} of {meta.pages} ({meta.total} total recorded history logs)
                   </div>
                   <div className="flex gap-2">
                     <button
@@ -739,8 +881,42 @@ export default function ActivityLogs({ onNavigate }: ActivityLogsProps) {
                   </div>
                 </div>
               )}
-            </div>
+            </CardShell>
           </div>
+
+          <nav
+            className="fixed inset-x-0 bottom-0 z-50 flex w-full flex-col border-t border-white/10 bg-black [transform:translate3d(0,0,0)] md:hidden"
+            aria-label="Mobile primary navigation"
+          >
+            <div className="mx-auto flex w-full max-w-lg items-stretch justify-between gap-0 px-1 pt-1.5 pb-1">
+              {mobileBottomNav.map((item) => {
+                const active = item.path === '/activity-logs' || item.path === '/history'
+                const Icon = item.icon
+                return (
+                  <button
+                    type="button"
+                    key={item.path}
+                    onClick={() => onNavigate(item.path)}
+                    className={[
+                      'flex min-w-0 flex-1 flex-col items-center gap-0.5 rounded-xl px-1 py-1 text-[10px] font-bold transition',
+                      active ? 'text-[#f39b03]' : 'text-white/50 hover:text-white/80',
+                    ].join(' ')}
+                  >
+                    <span
+                      className={[
+                        'grid h-8 w-8 place-items-center rounded-lg transition',
+                        active ? 'bg-[#f39b03]/20 text-[#f39b03]' : 'bg-white/5 text-white/55',
+                      ].join(' ')}
+                    >
+                      <Icon size={18} strokeWidth={active ? 2.25 : 2} />
+                    </span>
+                    <span className="truncate">{item.label}</span>
+                  </button>
+                )
+              })}
+            </div>
+            <div aria-hidden className="mobile-nav-safe-spacer" />
+          </nav>
 
           <LayoutFooter />
         </main>

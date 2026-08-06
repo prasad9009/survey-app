@@ -65,7 +65,7 @@ const navItems: NavItem[] = [
   { label: 'Account Manager', icon: <Briefcase size={16} /> },
   { label: 'Clients & Sites', icon: <UsersRound size={16} /> },
   { label: 'Site Visits', icon: <FileText size={16} /> },
-  { label: 'Transitions', icon: <Activity size={16} /> },
+  { label: 'History', icon: <Activity size={16} /> },
   // { label: 'Reports', icon: <FileBarChart size={16} /> },
   { label: 'Settings', icon: <Building2 size={16} /> },
   { label: 'Log Out', icon: <LogOut size={16} /> },
@@ -152,8 +152,8 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
   const appliedNavYearRef = useRef(false)
   const navState = location.state as
     | {
-        selectedYear?: string
-      }
+      selectedYear?: string
+    }
     | undefined
 
   useEffect(() => {
@@ -235,11 +235,11 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
     if (!managerIdFromRoute) return undefined
     const fromMeta = ledgerMeta
       ? {
-          id: ledgerMeta.slug,
-          name: ledgerMeta.fullName,
-          shortName: ledgerMeta.shortName || ledgerMeta.fullName,
-          phone: ledgerMeta.phone ?? '',
-        }
+        id: ledgerMeta.slug,
+        name: ledgerMeta.fullName,
+        shortName: ledgerMeta.shortName || ledgerMeta.fullName,
+        phone: ledgerMeta.phone ?? '',
+      }
       : null
     if (fromMeta) return fromMeta
     if (managerFromSession) {
@@ -431,7 +431,7 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
       'Account Manager': '/account-manager',
       'Clients & Sites': '/clients-sites',
       'Site Visits': '/site-visits',
-      Transitions: '/activity-logs',
+      History: '/activity-logs',
       Reports: '/reports',
       Settings: '/settings',
     }
@@ -445,7 +445,7 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
     { label: 'Accounts', path: '/account-manager', icon: Briefcase },
     { label: 'Clients', path: '/clients-sites', icon: UsersRound },
     { label: 'Sites', path: '/site-visits', icon: MapPin },
-    // { label: 'Reports', path: '/reports', icon: FileBarChart },
+    { label: 'History', path: '/activity-logs', icon: Activity },
     { label: 'Settings', path: '/settings', icon: Building2 },
   ] as const
 
@@ -483,8 +483,8 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
                       isLogout
                         ? 'bg-red-500/15 text-red-300 ring-1 ring-red-400/35 hover:bg-red-500/20 hover:text-red-200'
                         : active
-                        ? 'bg-[#f39b03]/18 text-[#f39b03] ring-1 ring-[#f39b03]/30'
-                        : 'text-white/85 hover:bg-white/5 hover:text-white',
+                          ? 'bg-[#f39b03]/18 text-[#f39b03] ring-1 ring-[#f39b03]/30'
+                          : 'text-white/85 hover:bg-white/5 hover:text-white',
                     ].join(' ')}
                   >
                     <span
@@ -493,8 +493,8 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
                         isLogout
                           ? 'bg-red-500/18 text-red-300'
                           : active
-                          ? 'bg-[#f39b03]/14'
-                          : 'bg-white/5',
+                            ? 'bg-[#f39b03]/14'
+                            : 'bg-white/5',
                       ].join(' ')}
                     >
                       {item.icon}
@@ -927,68 +927,68 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
                     onSubmit={(event) => {
                       event.preventDefault()
                       void txSubmitLock.run(async () => {
-                      if (!managerIdFromRoute) return
+                        if (!managerIdFromRoute) return
 
-                      const trimmedReason = (draftTx.reason ?? '').trim()
-                      const trimmedClient = (draftTx.client ?? '').trim()
-                      const trimmedSite = (draftTx.site ?? '').trim()
+                        const trimmedReason = (draftTx.reason ?? '').trim()
+                        const trimmedClient = (draftTx.client ?? '').trim()
+                        const trimmedSite = (draftTx.site ?? '').trim()
 
-                      if (!draftTx.date) {
-                        toast.error('Please select a date')
-                        return
-                      }
-                      if (!Number.isFinite(draftTx.amount) || draftTx.amount <= 0) {
-                        toast.error('Enter a valid amount greater than zero')
-                        return
-                      }
-                      if (draftTx.type === 'debit' && trimmedReason.length === 0) {
-                        toast.error('Debit transactions require a reason')
-                        return
-                      }
-                      if (draftTx.type === 'credit' && (trimmedClient.length === 0 || trimmedSite.length === 0)) {
-                        toast.error('Credit transactions require client and site')
-                        return
-                      }
-
-                      try {
-                        const res = await http.post<{
-                          ok: boolean
-                          transaction: {
-                            id: string
-                            type: string
-                            amount: number
-                            date: string
-                            reason?: string
-                            client?: string
-                            site?: string
-                          }
-                          error?: string
-                        }>(`/api/transactions/${managerIdFromRoute}`, {
-                          type: draftTx.type,
-                          amount: draftTx.amount,
-                          date: draftTx.date,
-                          reason: draftTx.type === 'debit' ? trimmedReason : undefined,
-                          clientName: draftTx.type === 'credit' ? trimmedClient : undefined,
-                          siteName: draftTx.type === 'credit' ? trimmedSite : undefined,
-                        })
-                        if (res.status !== 201 || !res.data?.ok) {
-                          toast.error(res.data?.error ?? 'Could not save transaction')
+                        if (!draftTx.date) {
+                          toast.error('Please select a date')
                           return
                         }
-                        const tx = res.data.transaction
-                        if (managerIdFromRoute) {
-                          invalidateAfterTransactionChange(
-                            queryClient,
-                            managerIdFromRoute,
-                            selectedYear,
-                            activeInstrumentId,
-                          )
+                        if (!Number.isFinite(draftTx.amount) || draftTx.amount <= 0) {
+                          toast.error('Enter a valid amount greater than zero')
+                          return
                         }
-                        toast.success('Transaction saved')
-                        setIsAddOpen(false)
-                      } catch {
-                        toast.error('Could not save transaction')
-                      }
+                        if (draftTx.type === 'debit' && trimmedReason.length === 0) {
+                          toast.error('Debit transactions require a reason')
+                          return
+                        }
+                        if (draftTx.type === 'credit' && (trimmedClient.length === 0 || trimmedSite.length === 0)) {
+                          toast.error('Credit transactions require client and site')
+                          return
+                        }
+
+                        try {
+                          const res = await http.post<{
+                            ok: boolean
+                            transaction: {
+                              id: string
+                              type: string
+                              amount: number
+                              date: string
+                              reason?: string
+                              client?: string
+                              site?: string
+                            }
+                            error?: string
+                          }>(`/api/transactions/${managerIdFromRoute}`, {
+                            type: draftTx.type,
+                            amount: draftTx.amount,
+                            date: draftTx.date,
+                            reason: draftTx.type === 'debit' ? trimmedReason : undefined,
+                            clientName: draftTx.type === 'credit' ? trimmedClient : undefined,
+                            siteName: draftTx.type === 'credit' ? trimmedSite : undefined,
+                          })
+                          if (res.status !== 201 || !res.data?.ok) {
+                            toast.error(res.data?.error ?? 'Could not save transaction')
+                            return
+                          }
+                          const tx = res.data.transaction
+                          if (managerIdFromRoute) {
+                            invalidateAfterTransactionChange(
+                              queryClient,
+                              managerIdFromRoute,
+                              selectedYear,
+                              activeInstrumentId,
+                            )
+                          }
+                          toast.success('Transaction saved')
+                          setIsAddOpen(false)
+                        } catch {
+                          toast.error('Could not save transaction')
+                        }
                       })
                     }}
                   >
@@ -1115,8 +1115,8 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
               detail={
                 deleteConfirmTransaction
                   ? `${deleteConfirmTransaction.type === 'debit' ? 'Debit' : 'Credit'} · ${formatINR(
-                      deleteConfirmTransaction.amount,
-                    )} · ${deleteConfirmTransaction.date}`
+                    deleteConfirmTransaction.amount,
+                  )} · ${deleteConfirmTransaction.date}`
                   : undefined
               }
               confirmLabel="Delete"
@@ -1267,29 +1267,29 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
                         </p>
                       </div>
                     ) : (
-                    <ul className="flex flex-col gap-1.5 px-3 pb-1.5 pt-1.5">
-                      {filteredPendingRows.map((row) => (
-                        <li key={row.name}>
-                          <div className="flex w-full items-center justify-between gap-2 rounded-xl border border-neutral-200 bg-white p-2 shadow-sm ring-1 ring-black/5 md:p-3">
-                            <div className="flex min-w-0 items-center gap-2">
-                              <div className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-[#f39b03]/12 text-[#f39b03]">
-                                <IndianRupee size={16} />
+                      <ul className="flex flex-col gap-1.5 px-3 pb-1.5 pt-1.5">
+                        {filteredPendingRows.map((row) => (
+                          <li key={row.name}>
+                            <div className="flex w-full items-center justify-between gap-2 rounded-xl border border-neutral-200 bg-white p-2 shadow-sm ring-1 ring-black/5 md:p-3">
+                              <div className="flex min-w-0 items-center gap-2">
+                                <div className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-[#f39b03]/12 text-[#f39b03]">
+                                  <IndianRupee size={16} />
+                                </div>
+                                <div className="min-w-0">
+                                  <div className="truncate text-xs font-extrabold text-neutral-900">{row.name}</div>
+                                  <div className="mt-0.5 text-[10px] font-semibold text-neutral-500">{row.phone}</div>
+                                </div>
                               </div>
-                              <div className="min-w-0">
-                                <div className="truncate text-xs font-extrabold text-neutral-900">{row.name}</div>
-                                <div className="mt-0.5 text-[10px] font-semibold text-neutral-500">{row.phone}</div>
+                              <div className="shrink-0 text-right">
+                                <div className="text-xs font-extrabold text-rose-600">{row.pending}</div>
+                                <div className="mt-0.5 text-[10px] font-semibold text-neutral-500">
+                                  Net {formatINR(parseCurrency(row.credit) - parseCurrency(row.debit))}
+                                </div>
                               </div>
                             </div>
-                            <div className="shrink-0 text-right">
-                              <div className="text-xs font-extrabold text-rose-600">{row.pending}</div>
-                              <div className="mt-0.5 text-[10px] font-semibold text-neutral-500">
-                                Net {formatINR(parseCurrency(row.credit) - parseCurrency(row.debit))}
-                              </div>
-                            </div>
-                          </div>
-                        </li>
-                      ))}
-                    </ul>
+                          </li>
+                        ))}
+                      </ul>
                     )
                   ) : filteredTableTransactions.length === 0 ? (
                     <div className="px-4 py-10 text-center">

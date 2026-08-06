@@ -114,6 +114,7 @@ function AppRoutes() {
           <Route path="/reports" element={<Reports onNavigate={navigate} />} />
           <Route path="/activity-logs" element={<ActivityLogs onNavigate={navigate} />} />
           <Route path="/transitions" element={<ActivityLogs onNavigate={navigate} />} />
+          <Route path="/history" element={<ActivityLogs onNavigate={navigate} />} />
           <Route path="/settings" element={<Settings onNavigate={navigate} />} />
           <Route path="*" element={<CatchAllRedirect />} />
         </Route>

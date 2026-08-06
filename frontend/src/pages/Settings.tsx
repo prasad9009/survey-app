@@ -137,7 +137,7 @@ export default function Settings({ onNavigate }: SettingsProps) {
     { label: 'Account Manager', icon: <Briefcase size={16} /> },
     { label: 'Clients & Sites', icon: <UsersRound size={16} /> },
     { label: 'Site Visits', icon: <ClipboardList size={16} /> },
-    { label: 'Transitions', icon: <Activity size={16} /> },
+    { label: 'History', icon: <Activity size={16} /> },
     // { label: 'Reports', icon: <FileBarChart size={16} /> },
     { label: 'Settings', icon: <Building2 size={16} /> },
     { label: 'Log Out', icon: <LogOut size={16} /> },
@@ -155,7 +155,7 @@ export default function Settings({ onNavigate }: SettingsProps) {
       'Account Manager': '/account-manager',
       'Clients & Sites': '/clients-sites',
       'Site Visits': '/site-visits',
-      Transitions: '/activity-logs',
+      History: '/activity-logs',
       Reports: '/reports',
       Settings: '/settings',
     }
@@ -169,7 +169,7 @@ export default function Settings({ onNavigate }: SettingsProps) {
     { label: 'Accounts', path: '/account-manager', icon: Briefcase },
     { label: 'Clients', path: '/clients-sites', icon: UsersRound },
     { label: 'Sites', path: '/site-visits', icon: ClipboardList },
-    // { label: 'Reports', path: '/reports', icon: FileBarChart },
+    { label: 'History', path: '/activity-logs', icon: Activity },
     { label: 'Settings', path: '/settings', icon: Building2 },
   ] as const
 
