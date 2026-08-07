@@ -30,7 +30,7 @@ import {
   Wallet,
   X,
 } from 'lucide-react'
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { Fragment, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useLocation } from 'react-router-dom'
 import { AccountManagerSidebarBlock } from '../AccountManagerSidebarBlock'
 import { CollaborationBrandMark } from '../CollaborationBrandMark'
@@ -44,7 +44,7 @@ import { useAuth } from '../context/AuthContext'
 import { useSelectedYear } from '../context/SelectedYearContext'
 import { signOut } from '../signOut'
 import http from '../services/http'
-import { CardShell, StatCard } from '../dashboardCards'
+import { CardPanel, CardShell, StatCard, toolbarSearchInputClass, toolbarSecondaryButtonClass } from '../dashboardCards'
 
 type ActivityLogsProps = {
   onNavigate: (path: string) => void
@@ -161,6 +161,22 @@ function getAdminInitials(name: string) {
   if (parts.length === 0) return 'A'
   if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase()
   return (parts[0][0] + parts[1][0]).toUpperCase()
+}
+
+/** Strip 'Er.' prefix and 'and related sites' from summary strings */
+function cleanSummary(summary: string): string {
+  if (!summary) return ''
+  return summary
+    .replace(/^Er\.\s*/i, '')
+    .replace(/\bEr\.\s*/gi, '')
+    .replace(/\s+and related sites\b/gi, '')
+    .trim()
+}
+
+/** Strip 'Er.' prefix from user names */
+function cleanUserName(name: string): string {
+  if (!name) return ''
+  return name.replace(/^Er\.\s*/i, '').trim()
 }
 
 /** Format friendly timestamp */
@@ -597,18 +613,11 @@ export default function ActivityLogs({ onNavigate }: ActivityLogsProps) {
                 </div>
               </div>
 
-              <div className="flex items-center gap-2 sm:gap-3">
-                <HeaderYearSelect />
+              <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+                <BackgroundRefreshIndicator isFetching={loading} />
+                <PageRefreshButton variant="onLight" />
+                <HeaderYearSelect variant="onLight" />
                 <HeaderAdminBadge />
-                <PageRefreshButton />
-                <button
-                  type="button"
-                  onClick={fetchLogs}
-                  className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-neutral-200 bg-white px-3.5 text-xs font-bold text-neutral-700 shadow-2xs transition hover:bg-neutral-50 active:scale-95"
-                >
-                  <RefreshCw className={`h-4 w-4 text-[#f39b03] ${loading ? 'animate-spin' : ''}`} />
-                  Refresh History
-                </button>
               </div>
             </div>
           </header>
@@ -655,88 +664,72 @@ export default function ActivityLogs({ onNavigate }: ActivityLogsProps) {
               />
             </section>
 
-            {/* User Friendly Filters Bar */}
-            <CardShell
-              title="Filter Activity Logs"
-              leadingIcon={<Filter size={18} />}
-              bodyClassName="p-3.5 sm:p-5 md:p-6"
-            >
-              <form onSubmit={handleSearchSubmit} className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 lg:grid-cols-4">
-                {/* Admin Select */}
-                <div>
-                  <label className="mb-1 block text-xs font-extrabold text-neutral-700">Performed By Admin</label>
-                  <AppSelect
-                    className="h-10 w-full rounded-xl border border-neutral-200 bg-white text-xs font-bold"
-                    value={selectedAdminId}
-                    onChange={(val) => {
-                      setSelectedAdminId(val)
-                      setPage(1)
-                    }}
-                    options={[
-                      { value: 'all', label: 'All Admins' },
-                      ...companyAdmins.map((adm) => ({
-                        value: adm.id,
-                        label: adm.fullName ? `Er. ${adm.fullName.replace(/^Er\.\s*/i, '')}` : 'Admin',
-                      })),
-                    ]}
-                  />
-                </div>
+            {/* Sleek Toolbar & Filter Bar matching Clients & Sites */}
+            <CardPanel className="my-3 flex flex-col gap-2.5 p-2.5 md:my-4 md:flex-row md:items-center md:justify-between md:gap-4 md:p-4">
+              <div className="w-full md:max-w-[480px]">
+                <input
+                  type="text"
+                  placeholder="Search client, site, or admin..."
+                  value={searchQuery}
+                  onChange={(e) => {
+                    setSearchQuery(e.target.value)
+                    setPage(1)
+                  }}
+                  className={toolbarSearchInputClass}
+                />
+              </div>
+              <div className="flex w-full flex-nowrap items-center gap-1.5 md:w-auto md:flex-wrap md:justify-start md:gap-2">
+                <AppSelect
+                  value={selectedAdminId}
+                  onChange={(val) => {
+                    setSelectedAdminId(val)
+                    setPage(1)
+                  }}
+                  className={[toolbarSecondaryButtonClass, 'min-w-0 flex-1 md:min-w-[8.5rem] md:flex-none'].join(' ')}
+                  aria-label="Filter by Admin"
+                  options={[
+                    { value: 'all', label: 'All Admins' },
+                    ...companyAdmins.map((adm) => ({
+                      value: adm.id,
+                      label: adm.fullName ? adm.fullName.replace(/^Er\.\s*/i, '') : 'Admin',
+                    })),
+                  ]}
+                />
 
-                {/* Category Select */}
-                <div>
-                  <label className="mb-1 block text-xs font-extrabold text-neutral-700">Action Type</label>
-                  <AppSelect
-                    className="h-10 w-full rounded-xl border border-neutral-200 bg-white text-xs font-bold"
-                    value={selectedActionCategory}
-                    onChange={(val) => {
-                      setSelectedActionCategory(val)
-                      setPage(1)
-                    }}
-                    options={[
-                      { value: 'all', label: 'All Actions (Add, Edit, Delete)' },
-                      { value: 'Create', label: '🟢 Additions Only' },
-                      { value: 'Update', label: '🟡 Modifications Only' },
-                      { value: 'Delete', label: '🔴 Deletions Only' },
-                    ]}
-                  />
-                </div>
+                <AppSelect
+                  value={selectedActionCategory}
+                  onChange={(val) => {
+                    setSelectedActionCategory(val)
+                    setPage(1)
+                  }}
+                  className={[toolbarSecondaryButtonClass, 'min-w-0 flex-1 md:min-w-[8.5rem] md:flex-none'].join(' ')}
+                  aria-label="Filter by Action"
+                  options={[
+                    { value: 'all', label: 'All Actions' },
+                    { value: 'Create', label: 'Additions' },
+                    { value: 'Update', label: 'Modifications' },
+                    { value: 'Delete', label: 'Deletions' },
+                  ]}
+                />
 
-                {/* Module / Entity Select */}
-                <div>
-                  <label className="mb-1 block text-xs font-extrabold text-neutral-700">Module / Entity</label>
-                  <AppSelect
-                    className="h-10 w-full rounded-xl border border-neutral-200 bg-white text-xs font-bold"
-                    value={selectedEntityType}
-                    onChange={(val) => {
-                      setSelectedEntityType(val)
-                      setPage(1)
-                    }}
-                    options={[
-                      { value: 'all', label: 'All Modules' },
-                      { value: 'client', label: '👥 Clients' },
-                      { value: 'site', label: '📍 Sites' },
-                      { value: 'site_visit', label: '📋 Site Visits' },
-                      { value: 'transaction', label: '💳 Payment Ledger' },
-                    ]}
-                  />
-                </div>
-
-                {/* Search */}
-                <div>
-                  <label className="mb-1 block text-xs font-extrabold text-neutral-700">Search Records</label>
-                  <div className="relative">
-                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" />
-                    <input
-                      type="text"
-                      placeholder="Search client, site, or admin..."
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      className="h-10 w-full rounded-xl border border-neutral-200 bg-white pl-9 pr-3 text-xs font-bold text-neutral-900 placeholder:text-neutral-400 focus:border-[#f39b03] focus:outline-none"
-                    />
-                  </div>
-                </div>
-              </form>
-            </CardShell>
+                <AppSelect
+                  value={selectedEntityType}
+                  onChange={(val) => {
+                    setSelectedEntityType(val)
+                    setPage(1)
+                  }}
+                  className={[toolbarSecondaryButtonClass, 'min-w-0 flex-1 md:min-w-[8.5rem] md:flex-none'].join(' ')}
+                  aria-label="Filter by Module"
+                  options={[
+                    { value: 'all', label: 'All Modules' },
+                    { value: 'client', label: 'Clients' },
+                    { value: 'site', label: 'Sites' },
+                    { value: 'site_visit', label: 'Site Visits' },
+                    { value: 'transaction', label: 'Payments' },
+                  ]}
+                />
+              </div>
+            </CardPanel>
 
             {/* Visual Activity Timeline Feed */}
             <CardShell
@@ -765,94 +758,186 @@ export default function ActivityLogs({ onNavigate }: ActivityLogsProps) {
                   </p>
                 </div>
               ) : (
-                <div className="divide-y divide-neutral-100">
-                  {logs.map((log) => {
-                    const actionCfg = getActionConfig(log.action)
-                    const isExpanded = expandedId === log.id
-                    const timeAgo = formatFriendlyDate(log.createdAt)
-                    const initials = getAdminInitials(log.userName)
+                <>
+                  {/* Mobile View: Single-line clean horizontal cards matching Clients & Sites */}
+                  <div className="md:hidden">
+                    <ul className="flex flex-col gap-1.5 px-3 pb-4 pt-1.5">
+                      {logs.map((log) => {
+                        const actionCfg = getActionConfig(log.action)
+                        const isExpanded = expandedId === log.id
+                        const timeAgo = formatFriendlyDate(log.createdAt)
+                        const initials = getAdminInitials(log.userName)
+                        const hasDetails = Boolean(log.details && Object.keys(log.details).length > 0)
 
-                    return (
-                      <div
-                        key={log.id}
-                        className="group p-4 transition-colors duration-150 hover:bg-neutral-50/80 sm:p-5"
-                      >
-                        <div className="flex items-start gap-3.5">
-                          {/* Admin Avatar */}
-                          <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-[#0b0b0b] to-[#262626] font-extrabold text-white text-xs shadow-2xs ring-1 ring-black/10">
-                            {initials}
-                          </div>
+                        return (
+                          <li key={log.id}>
+                            <div className="flex flex-col rounded-xl border border-neutral-200 bg-white p-2 shadow-sm ring-1 ring-black/5">
+                              <div className="flex items-center gap-2">
+                                {/* Main content block */}
+                                <div className="flex min-w-0 flex-1 items-center gap-2 rounded-lg px-1 py-0.5 text-left">
+                                  {/* Initials Avatar matching Clients & Sites */}
+                                  <div
+                                    className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[#f39b03]/15 text-[10px] font-extrabold text-[#c97702] ring-1 ring-[#f39b03]/25"
+                                    aria-hidden
+                                  >
+                                    {initials}
+                                  </div>
 
-                          {/* Log Main Content */}
-                          <div className="min-w-0 flex-1 space-y-1.5">
-                            {/* Badges Row */}
-                            <div className="flex flex-wrap items-center gap-2">
-                              <span
-                                className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-extrabold ring-1 ${actionCfg.badge}`}
-                              >
-                                {actionCfg.label}
-                              </span>
+                                  {/* Info Column */}
+                                  <div className="min-w-0 flex-1">
+                                    {/* Action badge & timestamp */}
+                                    <div className="flex items-center gap-1.5 min-w-0">
+                                      <span className={`inline-flex shrink-0 items-center rounded-md px-1.5 py-0.5 text-[9px] font-extrabold ring-1 ${actionCfg.badge}`}>
+                                        {actionCfg.label}
+                                      </span>
+                                      <span className="text-[10px] font-semibold text-neutral-400">•</span>
+                                      <span className="text-[10px] font-semibold text-neutral-500">{timeAgo}</span>
+                                    </div>
+                                    {/* Summary text below action type */}
+                                    <div className="mt-0.5 truncate text-xs font-extrabold text-neutral-900">
+                                      {cleanSummary(log.summary)}
+                                    </div>
+                                  </div>
+                                </div>
 
-                              <span className="inline-flex items-center gap-1.5 rounded-md bg-neutral-100 px-2 py-0.5 text-[11px] font-bold text-neutral-700">
-                                <EntityIcon type={log.entityType} />
-                                {getEntityName(log.entityType)}
-                              </span>
+                                {/* View Details Action Button */}
+                                {hasDetails ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => setExpandedId(isExpanded ? null : log.id)}
+                                    className="inline-flex h-7 px-2 shrink-0 items-center justify-center gap-1 rounded-lg border border-neutral-200 bg-white text-[10px] font-bold text-neutral-700 transition hover:bg-neutral-50 self-center"
+                                    aria-label={isExpanded ? 'Hide Details' : 'View Details'}
+                                  >
+                                    <span>{isExpanded ? 'Hide' : 'Details'}</span>
+                                    <ChevronDown className={`h-3 w-3 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                                  </button>
+                                ) : null}
+                              </div>
 
-                              <span className="text-neutral-300">·</span>
-
-                              <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-neutral-500">
-                                <Clock size={13} className="text-neutral-400" />
-                                {timeAgo}
-                              </span>
+                              {/* Expandable Details Drawer */}
+                              {isExpanded && log.details ? (
+                                <div className="mt-2 border-t border-neutral-100 pt-2 px-1 pb-1">
+                                  <div className="text-[10px] font-extrabold uppercase tracking-wide text-neutral-500 mb-1 flex items-center gap-1">
+                                    <Info size={12} className="text-[#f39b03]" />
+                                    Changed Details
+                                  </div>
+                                  <FriendlyDetailsViewer details={log.details} />
+                                </div>
+                              ) : null}
                             </div>
+                          </li>
+                        )
+                      })}
+                    </ul>
+                  </div>
 
-                            {/* Human Summary */}
-                            <p className="text-sm font-bold text-neutral-900 leading-snug">
-                              {log.summary}
-                            </p>
+                  {/* Desktop View: Structured table matching Clients & Sites */}
+                  <div className="hidden overflow-x-auto md:block">
+                    <table className="w-full min-w-[980px] border-collapse">
+                      <thead className="bg-neutral-50">
+                        <tr className="text-left text-xs font-extrabold uppercase tracking-wide text-neutral-500">
+                          <th className="px-6 py-4">Performed By</th>
+                          <th className="px-4 py-4">Action & Entity</th>
+                          <th className="px-4 py-4">Activity Summary</th>
+                          <th className="px-4 py-4">Date & Time</th>
+                          <th className="px-4 py-4 text-center">Action</th>
+                        </tr>
+                      </thead>
+                      <tbody className="text-sm font-semibold text-neutral-800">
+                        {logs.map((log) => {
+                          const actionCfg = getActionConfig(log.action)
+                          const isExpanded = expandedId === log.id
+                          const timeAgo = formatFriendlyDate(log.createdAt)
+                          const initials = getAdminInitials(log.userName)
+                          const hasDetails = Boolean(log.details && Object.keys(log.details).length > 0)
 
-                            {/* Admin Attribution Row */}
-                            <div className="flex items-center gap-2 text-xs font-semibold text-neutral-500">
-                              <UserCheck size={14} className="text-[#f39b03]" />
-                              <span>
-                                Action performed by{' '}
-                                <strong className="font-extrabold text-neutral-900">{log.userName}</strong>
-                              </span>
-                              <span className="rounded-md bg-neutral-100 px-1.5 py-0.5 text-[10px] font-extrabold uppercase text-neutral-600">
-                                {log.userRole}
-                              </span>
-                            </div>
-                          </div>
+                          return (
+                            <Fragment key={log.id}>
+                              <tr className="border-t border-neutral-200 hover:bg-neutral-50/60 transition-colors">
+                                {/* Performed By */}
+                                <td className="px-6 py-3.5">
+                                  <div className="flex items-center gap-3">
+                                    <div
+                                      className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-[#f39b03]/15 text-xs font-extrabold text-[#c97702] ring-1 ring-[#f39b03]/25"
+                                      aria-hidden
+                                    >
+                                      {initials}
+                                    </div>
+                                    <div className="min-w-0">
+                                      <div className="truncate font-extrabold text-neutral-950">{cleanUserName(log.userName)}</div>
+                                      <div className="mt-0.5 text-xs font-semibold text-neutral-500">
+                                        Role: <span className="uppercase">{log.userRole}</span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </td>
 
-                          {/* Expand Details Button */}
-                          {log.details && Object.keys(log.details).length > 0 && (
-                            <button
-                              type="button"
-                              onClick={() => setExpandedId(isExpanded ? null : log.id)}
-                              className="inline-flex items-center gap-1 rounded-lg border border-neutral-200 bg-white px-2.5 py-1.5 text-xs font-bold text-[#b87402] shadow-2xs transition hover:bg-neutral-50"
-                            >
-                              <span>{isExpanded ? 'Hide Details' : 'View Details'}</span>
-                              {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                            </button>
-                          )}
-                        </div>
+                                {/* Action & Entity */}
+                                <td className="px-4 py-3.5 whitespace-nowrap">
+                                  <div className="flex flex-col gap-1 items-start">
+                                    <span className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-extrabold ring-1 ${actionCfg.badge}`}>
+                                      {actionCfg.label}
+                                    </span>
+                                    <span className="inline-flex items-center gap-1.5 text-xs font-bold text-neutral-600">
+                                      <EntityIcon type={log.entityType} />
+                                      {getEntityName(log.entityType)}
+                                    </span>
+                                  </div>
+                                </td>
 
-                        {/* Expandable Key-Value Details Panel */}
-                        {isExpanded && log.details && (
-                          <div className="mt-3.5 rounded-xl border border-neutral-200/70 bg-neutral-50/70 p-3.5">
-                            <div className="flex items-center justify-between border-b border-neutral-200/60 pb-2">
-                              <span className="text-[11px] font-extrabold uppercase tracking-wide text-neutral-500 flex items-center gap-1.5">
-                                <Info size={14} className="text-[#f39b03]" />
-                                Changed Details
-                              </span>
-                            </div>
-                            <FriendlyDetailsViewer details={log.details} />
-                          </div>
-                        )}
-                      </div>
-                    )
-                  })}
-                </div>
+                                {/* Activity Summary */}
+                                <td className="px-4 py-3.5 font-extrabold text-neutral-900 max-w-xs xl:max-w-md truncate">
+                                  {cleanSummary(log.summary)}
+                                </td>
+
+                                {/* Date & Time */}
+                                <td className="px-4 py-3.5 text-xs font-semibold text-neutral-600 whitespace-nowrap">
+                                  {timeAgo}
+                                </td>
+
+                                {/* Action */}
+                                <td className="px-4 py-3.5 text-center whitespace-nowrap">
+                                  {hasDetails ? (
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation()
+                                        setExpandedId(isExpanded ? null : log.id)
+                                      }}
+                                      className="inline-flex items-center gap-1 rounded-lg border border-neutral-200 bg-white px-3 py-1.5 text-xs font-bold text-neutral-700 shadow-2xs transition hover:bg-neutral-50"
+                                    >
+                                      <span>{isExpanded ? 'Hide Details' : 'View Details'}</span>
+                                      <ChevronDown className={`h-3.5 w-3.5 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                                    </button>
+                                  ) : (
+                                    <span className="text-xs font-medium text-neutral-400">—</span>
+                                  )}
+                                </td>
+                              </tr>
+
+                              {/* Expandable Details Accordion Row */}
+                              {isExpanded && log.details ? (
+                                <tr className="bg-neutral-50/70 border-t border-neutral-100">
+                                  <td colSpan={5} className="px-6 py-4">
+                                    <div className="rounded-xl border border-neutral-200/70 bg-white p-3.5">
+                                      <div className="flex items-center justify-between border-b border-neutral-200/60 pb-2 mb-2">
+                                        <span className="text-xs font-extrabold uppercase tracking-wide text-neutral-500 flex items-center gap-1.5">
+                                          <Info size={14} className="text-[#f39b03]" />
+                                          Changed Details
+                                        </span>
+                                      </div>
+                                      <FriendlyDetailsViewer details={log.details} />
+                                    </div>
+                                  </td>
+                                </tr>
+                              ) : null}
+                            </Fragment>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
               )}
 
               {/* Pagination */}

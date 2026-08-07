@@ -638,7 +638,8 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
                 <PageRefreshButton variant="onDark" />
               </div>
               <div className="flex items-center justify-between gap-3 border-t border-white/10 px-4 py-3">
-                <h1 className="min-w-0 truncate text-left text-base font-extrabold leading-tight tracking-tight text-white">
+                <h1 className="min-w-0 truncate text-left text-base font-extrabold leading-tight tracking-tight text-white flex items-center gap-2">
+                  <Briefcase size={18} className="text-[#f39b03]" />
                   {pageTitle}
                 </h1>
                 <div className="flex shrink-0 items-center gap-2">
@@ -659,9 +660,15 @@ export default function AccountManager({ onNavigate }: AccountManagerProps) {
                 >
                   <Menu size={18} className="text-neutral-900" />
                 </button>
-                <h1 className="min-w-0 max-w-[min(100%,28rem)] truncate text-lg font-extrabold tracking-tight text-neutral-950 sm:text-xl">
-                  {pageTitle}
-                </h1>
+                <div>
+                  <h1 className="text-xl font-extrabold text-neutral-900 sm:text-2xl flex items-center gap-2.5">
+                    <Briefcase className="h-6 w-6 text-[#f39b03]" />
+                    {pageTitle}
+                  </h1>
+                  <p className="text-xs font-semibold text-neutral-500">
+                    Financial ledgers, manager accounts, payments, and transaction history
+                  </p>
+                </div>
               </div>
 
               <div className="flex shrink-0 items-center gap-2 sm:gap-3">

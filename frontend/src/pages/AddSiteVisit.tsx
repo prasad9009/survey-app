@@ -585,7 +585,8 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
                 <PageRefreshButton variant="onDark" />
               </div>
               <div className="flex items-center justify-between gap-3 border-t border-white/10 px-4 py-3">
-                <h1 className="min-w-0 flex-1 truncate text-left text-base font-extrabold leading-tight tracking-tight text-white">
+                <h1 className="min-w-0 flex-1 truncate text-left text-base font-extrabold leading-tight tracking-tight text-white flex items-center gap-2">
+                  <ClipboardList size={18} className="text-[#f39b03]" />
                   Site Visits
                 </h1>
                 <div className="flex shrink-0 items-center gap-2">
@@ -595,7 +596,7 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
               </div>
             </div>
             <div className="relative hidden w-full items-center justify-between gap-4 border-b border-neutral-200 bg-white px-4 py-2.5 shadow-[0_6px_20px_rgba(16,24,40,0.05)] sm:px-6 md:flex md:px-6 md:py-4 lg:px-8">
-              <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+              <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
                 <button
                   type="button"
                   className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-white shadow-sm ring-1 ring-black/5 hover:bg-neutral-50 md:h-10 md:w-10 md:shadow-[0_10px_30px_rgba(16,24,40,0.06)] lg:hidden"
@@ -604,8 +605,14 @@ export default function AddSiteVisit({ onNavigate }: AddSiteVisitProps) {
                 >
                   <Menu size={18} className="text-neutral-900" />
                 </button>
-                <div className="truncate text-lg font-extrabold tracking-tight text-neutral-950 sm:text-xl">
-                  Site Visits
+                <div>
+                  <h1 className="text-xl font-extrabold text-neutral-900 sm:text-2xl flex items-center gap-2.5">
+                    <ClipboardList className="h-6 w-6 text-[#f39b03]" />
+                    Site Visits Management
+                  </h1>
+                  <p className="text-xs font-semibold text-neutral-500">
+                    Log and track site visits, machine logs, work progress, and site photos
+                  </p>
                 </div>
               </div>
 

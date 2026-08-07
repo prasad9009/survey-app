@@ -501,7 +501,7 @@ export async function deleteClientWithSites(req, clientId) {
     action: 'DELETE_CLIENT',
     entityType: 'client',
     entityId: client._id,
-    summary: `${delActor.userName} deleted client '${client.name}' and related sites`,
+    summary: `${delActor.userName} deleted client '${client.name}'`,
     details: { clientName: client.name, sitesDeleted: deletedSites.deletedCount },
   })
 
