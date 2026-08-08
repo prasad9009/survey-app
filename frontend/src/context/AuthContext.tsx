@@ -265,6 +265,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         })
         const year = clampRecordYearString(String(new Date().getFullYear()))
         void prefetchAfterLogin(queryClient, year, activeId)
+        return res.data.user
       } catch (err) {
         if (axios.isAxiosError(err)) {
           const msg = (err.response?.data as { error?: string } | undefined)?.error ?? 'Login failed'

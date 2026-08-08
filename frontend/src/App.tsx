@@ -27,6 +27,11 @@ const SiteDetails = lazy(() => import('./pages/SiteDetails').then((m) => ({ defa
 const Reports = lazy(() => import('./pages/Reports'))
 const Settings = lazy(() => import('./pages/Settings'))
 const ActivityLogs = lazy(() => import('./pages/ActivityLogs'))
+const AdminManagement = lazy(() => import('./pages/AdminManagement'))
+const InstrumentManagement = lazy(() => import('./pages/InstrumentManagement'))
+const CompanySettings = lazy(() => import('./pages/CompanySettings'))
+const BackupExport = lazy(() => import('./pages/BackupExport'))
+import { SuperAdminGuard } from './components/SuperAdminGuard'
 
 
 const PUBLIC_PATHS = new Set(['/login', '/forgot-password', '/verify-reset-otp', '/reset-password'])
@@ -45,13 +50,15 @@ function AuthBoundary() {
 }
 
 function HomeRedirect() {
-  const { token } = useAuth()
-  return <Navigate to={token ? '/dashboard' : '/login'} replace />
+  const { token, user } = useAuth()
+  if (!token) return <Navigate to="/login" replace />
+  return <Navigate to={user?.role === 'super_admin' ? '/super-admin/admins' : '/dashboard'} replace />
 }
 
 function CatchAllRedirect() {
-  const { token } = useAuth()
-  return <Navigate to={token ? '/dashboard' : '/login'} replace />
+  const { token, user } = useAuth()
+  if (!token) return <Navigate to="/login" replace />
+  return <Navigate to={user?.role === 'super_admin' ? '/super-admin/admins' : '/dashboard'} replace />
 }
 
 /** Mobile: pick a manager. Desktop (md+): same URL redirects to default manager ledger. */
@@ -116,6 +123,38 @@ function AppRoutes() {
           <Route path="/transitions" element={<ActivityLogs onNavigate={navigate} />} />
           <Route path="/history" element={<ActivityLogs onNavigate={navigate} />} />
           <Route path="/settings" element={<Settings onNavigate={navigate} />} />
+          <Route
+            path="/super-admin/admins"
+            element={
+              <SuperAdminGuard>
+                <AdminManagement onNavigate={navigate} />
+              </SuperAdminGuard>
+            }
+          />
+          <Route
+            path="/super-admin/instruments"
+            element={
+              <SuperAdminGuard>
+                <InstrumentManagement onNavigate={navigate} />
+              </SuperAdminGuard>
+            }
+          />
+          <Route
+            path="/super-admin/company"
+            element={
+              <SuperAdminGuard>
+                <CompanySettings onNavigate={navigate} />
+              </SuperAdminGuard>
+            }
+          />
+          <Route
+            path="/super-admin/backup"
+            element={
+              <SuperAdminGuard>
+                <BackupExport onNavigate={navigate} />
+              </SuperAdminGuard>
+            }
+          />
           <Route path="*" element={<CatchAllRedirect />} />
         </Route>
       </Routes>

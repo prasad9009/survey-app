@@ -232,7 +232,7 @@ export async function getMe(userId) {
 
 export async function listAdminsForSuper(user) {
   if (user.role !== 'super_admin') throw new ApiError(403, 'Forbidden')
-  const admins = await User.find({ companyId: user.companyId, role: 'admin' })
+  const admins = await User.find({ companyId: user.companyId, role: { $in: ['admin', 'super_admin'] } })
     .select('email role isActive profile createdAt')
     .lean()
   const out = []
@@ -240,14 +240,17 @@ export async function listAdminsForSuper(user) {
     const assignments = await InstrumentAssignment.find({ adminId: a._id, isActive: true, revokedAt: { $exists: false } })
       .populate('instrumentId', 'name')
       .lean()
+    const validAssignments = assignments.filter((x) => x.instrumentId?._id)
     out.push({
       id: a._id.toString(),
       email: a.email,
+      role: a.role,
       isActive: a.isActive,
       fullName: a.profile?.fullName ?? '',
       phone: a.profile?.phone ?? '',
-      instruments: assignments.map((x) => ({
-        id: x.instrumentId?._id?.toString(),
+      instrumentIds: validAssignments.map((x) => x.instrumentId._id.toString()),
+      instruments: validAssignments.map((x) => ({
+        id: x.instrumentId._id.toString(),
         name: x.instrumentId?.name,
       })),
     })

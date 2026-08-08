@@ -18,7 +18,7 @@ import {
   UsersRound,
 } from 'lucide-react'
 import { Fragment, useMemo, useState, type ReactNode } from 'react'
-import { useLocation } from 'react-router-dom'
+import { Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { BackgroundRefreshIndicator } from '../components/BackgroundRefreshIndicator'
 import { useDashboardStats } from '../hooks/queries'

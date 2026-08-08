@@ -104,7 +104,7 @@ const GoogleLogo = () => (
 
 function Login() {
   const navigate = useNavigate()
-  const { login, token, isLoading } = useAuth()
+  const { login, token, user, isLoading } = useAuth()
   const [identifier, setIdentifier] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
@@ -129,11 +129,12 @@ function Login() {
     }
     setIsSubmitting(true)
     try {
-      await login(id, password)
+      const loggedUser = await login(id, password)
       setIdentifier('')
       setPassword('')
       toast.success('Signed in')
-      navigate('/dashboard', { replace: true })
+      const targetPath = loggedUser?.role === 'super_admin' ? '/super-admin/admins' : '/dashboard'
+      navigate(targetPath, { replace: true })
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Login failed'
       toast.error(msg)
@@ -143,7 +144,8 @@ function Login() {
   }
 
   if (!isLoading && token) {
-    return <Navigate to="/dashboard" replace />
+    const targetPath = user?.role === 'super_admin' ? '/super-admin/admins' : '/dashboard'
+    return <Navigate to={targetPath} replace />
   }
 
   return (

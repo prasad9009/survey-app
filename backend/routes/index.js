@@ -380,6 +380,11 @@ router.patch('/settings/company', requireRole('super_admin'), catchAsync(async (
   res.json({ ok: true })
 }))
 
+router.put('/settings/company', requireRole('super_admin'), catchAsync(async (req, res) => {
+  await settingsService.updateCompanySettings(req, req.body)
+  res.json({ ok: true })
+}))
+
 router.get('/settings/me', catchAsync(async (req, res) => {
   const data = await settingsService.getUserSettings(req)
   res.json({ ok: true, ...data })
@@ -476,6 +481,18 @@ router.get('/instruments/coworkers', validateQuery(instrumentCoworkersQuerySchem
 router.post('/instruments', requireRole('super_admin'), validateBody(createInstrumentSchema), catchAsync(async (req, res) => {
   const data = await instrumentService.createInstrument(req, req.body)
   res.status(201).json({ ok: true, instrument: data })
+}))
+
+router.put('/instruments/:id', requireRole('super_admin'), catchAsync(async (req, res) => {
+  const id = parseObjectId(req.params.id, 'instrument id')
+  const data = await instrumentService.updateInstrument(req, id, req.body)
+  res.json({ ok: true, ...data })
+}))
+
+router.delete('/instruments/:id', requireRole('super_admin'), catchAsync(async (req, res) => {
+  const id = parseObjectId(req.params.id, 'instrument id')
+  const data = await instrumentService.deleteInstrument(req, id)
+  res.json({ ok: true, ...data })
 }))
 
 router.get('/admins', requireRole('super_admin'), catchAsync(async (req, res) => {
